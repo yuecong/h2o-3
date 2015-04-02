@@ -585,7 +585,6 @@ public class DRFTest extends TestUtil {
     Scope.exit();
   }
 
-  @Ignore
   @Test public void testRowWeights() {
     Frame tfr=null, vfr=null;
 

@@ -157,21 +157,24 @@ public class DRF extends SharedTree<hex.tree.drf.DRFModel, hex.tree.drf.DRFModel
 //        }
 //      }
 
+      Frame tra_fr = addRowWeights(_train, rowWeights());
+      Frame val_fr = _valid == null ? null : addRowWeights(_valid, vrowWeights());
+
       _mtry = (_parms._mtries==-1) ? // classification: mtry=sqrt(_ncols), regression: mtry=_ncols/3
               ( isClassifier() ? Math.max((int)Math.sqrt(_ncols),1) : Math.max(_ncols/3,1))  : _parms._mtries;
       if (!(1 <= _mtry && _mtry <= _ncols)) throw new IllegalArgumentException("Computed mtry should be in interval <1,#cols> but it is " + _mtry);
       // Initialize TreeVotes for classification, MSE arrays for regression
       initTreeMeasurements();
       // Append number of trees participating in on-the-fly scoring
-      _train.add("OUT_BAG_TREES", _response.makeZero());
+      tra_fr.add("OUT_BAG_TREES", _response.makeZero());
       // Prepare working columns
-      new SetWrkTask().doAll(_train);
+      new SetWrkTask().doAll(tra_fr);
       // If there was a check point recompute tree_<_> and oob columns based on predictions from previous trees
       // but only if OOB validation is requested.
-      if (_valid==null && _parms._checkpoint) {
+      if (val_fr==null && _parms._checkpoint) {
         Timer t = new Timer();
         // Compute oob votes for each output level
-        new OOBScorer(_ncols, _nclass, _parms._sample_rate, _model._output._treeKeys).doAll(_train);
+        new OOBScorer(_ncols, _nclass, _parms._sample_rate, _model._output._treeKeys).doAll(tra_fr);
         Log.info("Reconstructing oob stats from checkpointed model took " + t);
       }
 
@@ -187,14 +190,14 @@ public class DRF extends SharedTree<hex.tree.drf.DRFModel, hex.tree.drf.DRFModel
       // Build trees until we hit the limit
       for( tid=0; tid<_parms._ntrees; tid++) { // Building tid-tree
         if (tid!=0 || !_parms._checkpoint) { // do not make initial scoring if model already exist
-          doScoringAndSaveModel(false, _valid==null, _parms._build_tree_one_node);
+          doScoringAndSaveModel(false, val_fr==null, _parms._build_tree_one_node);
         }
         // At each iteration build K trees (K = nclass = response column domain size)
 
         // TODO: parallelize more? build more than k trees at each time, we need to care about temporary data
         // Idea: launch more DRF at once.
         Timer kb_timer = new Timer();
-        ktrees = buildNextKTrees(_train,_mtry,_parms._sample_rate,rand,tid);
+        ktrees = buildNextKTrees(tra_fr,_mtry,_parms._sample_rate,rand,tid);
         Log.info((tid+1) + ". tree was built " + kb_timer.toString());
         DRF.this.update(1);
         if( !isRunning() ) return; // If canceled during building, do not bulkscore
@@ -202,7 +205,7 @@ public class DRF extends SharedTree<hex.tree.drf.DRFModel, hex.tree.drf.DRFModel
         // Check latest predictions
         _model._output.addKTrees(ktrees);
       }
-      doScoringAndSaveModel(true, _valid==null, _parms._build_tree_one_node);
+      doScoringAndSaveModel(true, val_fr==null, _parms._build_tree_one_node);
     }
 
 
@@ -311,7 +314,7 @@ public class DRF extends SharedTree<hex.tree.drf.DRFModel, hex.tree.drf.DRFModel
         if( ktrees[i] != null )
           ktrees[i]._leaves = ktrees[i].len() - leafs[i];
       // DEBUG: Print the generated K trees
-      //printGenerateTrees(ktrees);
+      printGenerateTrees(ktrees);
 
       return ktrees;
     }

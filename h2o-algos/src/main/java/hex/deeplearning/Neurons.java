@@ -705,7 +705,7 @@ public abstract class Neurons {
             cats[ncats++] = c + _dinfo._catOffsets[i] - 1;
         }
       }
-      final int n = data.length - 1 /*row_weights*/; // data contains only input features - no response is included
+      final int n = data.length - _dinfo._row_weights;
       for(;i < n;++i){
         double d = data[i];
         if(_dinfo._normMul != null) d = (d - _dinfo._normSub[i-_dinfo._cats])*_dinfo._normMul[i-_dinfo._cats];
@@ -1328,7 +1328,9 @@ public abstract class Neurons {
     DenseVector(int len) { _data = new float[len]; }
     DenseVector(float[] v) { _data = v; }
     @Override public float get(int i) { return _data[i]; }
-    @Override public void set(int i, float val) { _data[i] = val; }
+    @Override public void set(int i, float val) {
+      _data[i] = val;
+    }
     @Override public void add(int i, float val) { _data[i] += val; }
     @Override public int size() { return _data.length; }
     @Override public float[] raw() { return _data; }
