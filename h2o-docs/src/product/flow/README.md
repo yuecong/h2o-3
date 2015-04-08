@@ -55,10 +55,16 @@ Before getting started with H2O Flow, make sure you understand the different cel
 <a name="Cell"></a>
 # Understanding Cell Modes
 
-There are two modes for cells: edit and command. In edit mode, the cell is yellow with a blinking bar to indicate where text can be entered and there is an orange flag to the left of the cell.
+There are two modes for cells: edit and command. 
+
+
+##Using Edit Mode
+In edit mode, the cell is yellow with a blinking bar to indicate where text can be entered and there is an orange flag to the left of the cell.
 
 ![Edit Mode](images/Flow_EditMode.png)
  
+
+##Using Command Mode
  In command mode, the flag is yellow. The flag also indicates the cell's format: 
 
 - **MD**: Markdown 
@@ -87,6 +93,8 @@ There are two modes for cells: edit and command. In edit mode, the cell is yello
  
  ![Cell executing](images/Flow_cellmode_runningflag.png)
 
+
+##Running Flows
 When you run the flow, a progress bar that indicates the current status of the flow. You can cancel the currently running flow by clicking the **Stop** button in the progress bar. 
 
   ![Flow Progress Bar](images/Flow_progressbar.png)
@@ -96,6 +104,9 @@ When the flow is complete, a message displays in the upper right.
 
   ![Flow - Completed Successfully](images/Flow_run_pass.png)
   ![Flow - Did Not Complete](images/Flow_run_fail.png) 
+
+
+##Using Keyboard Shortcuts
 
 Here are some important keyboard shortcuts to remember: 
 
@@ -111,6 +122,8 @@ The following commands must be entered in command mode.
 
 You can view these shortcuts by clicking **Help** > **Keyboard Shortcuts** or by clicking the **Help** tab in the sidebar. 
 
+
+##Using Flow Buttons
 There are also a series of buttons at the top of the page below the flow name that allow you to save the current flow, add a new cell, move cells up or down, run the current cell, and cut, copy, or paste the current cell. If you hover over the button, a description of the button's function displays. 
 
  ![Flow buttons](images/Flow_buttons.png)
@@ -275,37 +288,27 @@ The **Build Model...** button can be accessed from any page containing the .hex 
 In the **Build a Model** cell, select an algorithm from the drop-down menu: 
 
 <a name="Kmeans"></a>
-- **kmeans**: Create a K-Means model
+- **K-means**: Create a K-Means model
 **Note**: For a K-Means model, the columns in the training frame cannot contain categorical values. If you select a dataset with categorical values as the training frame, the categorical columns are identified.
 
 <a name="GLM"></a>
-- **glm**: Create a Generalized Linear model
-
-<a name="grep"></a>
-- **grep**: Perform a global search for a specified character string and display the results (global regular expression)
-**Note**: For a grep model, the selected training frame must contain one vector of raw text. 
- 
-<a name="w2v"></a>
-- **word2vec**: Create a word-to-vector model for text-based data. 
-**Note**: For a word2vec model, the training frame must contain string columns. For more information about creating a "bag of words" model, refer to the tutorial on <a href="https://www.kaggle.com/c/word2vec-nlp-tutorial/details/part-1-for-beginners-bag-of-words" target="_blank">Kaggle's website</a>. 
+- **Generalized Linear Model**: Create a Generalized Linear model
 
 <a name="drf"></a>
-- **drf**: Create a distributed Random Forest model.  
+- **Distributed RF**: Create a distributed Random Forest model.  
 
 <a name="nb"></a>
-- **naivebayes**: Create a Naive Bayes model. 
+- **Naive Bayes**: Create a Naive Bayes model. 
 
 <a name="pca"></a> 
-- **pca**: Create a Principal Components Analysis model for modeling without regularization or performing dimensionality reduction. 
+- **Principal Component Analysis**: Create a Principal Components Analysis model for modeling without regularization or performing dimensionality reduction. 
 
 <a name="GBM"></a>
-- **gbm**: Create a Gradient Boosted model
+- **Gradient Boosting Machine**: Create a Gradient Boosted model
 
 <a name="DL"></a>
-- **deeplearning**: Create a Deep Learning model
+- **Deep Learning**: Create a Deep Learning model
 
-<a name="quantile"></a>
-- **quantile**: Obtain the quantile for the current data
 
 The available options vary depending on the selected model. If an option is only available for a specific model type, the model type is listed. If no model type is specified, the option is applicable to all model types. 
 
@@ -318,38 +321,34 @@ The available options vary depending on the selected model. If an option is only
 
 - **Ignored_columns**: (Optional) Click the plus sign next to a column name to add it to the list of columns excluded from the model. To add all columns, click the **Add all** button. To remove a column from the list of ignored columns, click the X next to the column name. To remove all columns from the list of ignored columns, click the **Clear all** button. 
 
-- **DropNA20Cols**: (Optional)Check this checkbox to drop columns that are missing (i.e., use 0 or NA) over 20% of their values 
+- **DropNA20Cols**: (Optional) Check this checkbox to omit columns that are missing (i.e., use 0 or NA) over 20% of their values. 
 
-- **User_points**: [(K-Means)](#Kmeans), [(PCA)](#pca) For K-Means, specify the number of initial cluster centers. For PCA, specify the initial Y matrix. 
+- **User_points**: [(K-Means](#Kmeans), [PCA)](#pca) For K-Means, specify the number of initial cluster centers. For PCA, specify the initial Y matrix. 
 **Note**: The PCA **User_points** parameter should only be used by advanced users for testing purposes.  
 
 - **Transform**: [(PCA)](#pca) Select the transformation method for the training data: None, Standardize, Normalize, Demean, or Descale. The default is None. 
 
 - **Score\_each\_iteration**: (Optional) Score the validation set after each iteration of the model-building process. If you select this option, the model-building time increases. 
 
-- **Probs**: [(Quantile)](#quantile) Specify the probabilities for quantiles. The default values are 0.001, 0.01, 0.1, 0.25, 0.333, 0.5, 0.667, 0.75, 0.9, 0.99, 0.999. 
-
 - **Response_column**: (Required for [GLM](#GLM), [GBM](#GBM), [DL](#DL)) Select the column to use as the independent variable.
 
 - **Ratios**: [(Splitframe)](#sf) Specify the split ratio. The resulting number of the split is the ratio length +1. The default value is 0.5. 
 
-- **Balance_classes**: ([GLM](#GLM), [GBM](#GBM), [DL](#DL), [(DRF)](#drf), [(NaiveBayes)](#nb) Upsample the minority classes to balance the class distribution. This option is not selected by default. 
+- **Balance_classes**: ([GBM](#GBM), [DL](#DL), [DRF](#drf), [NaiveBayes)](#nb) Upsample the minority classes to balance the class distribution. This option is not selected by default. 
 
-- **Max\_after\_balance\_size**: [GLM](#GLM), [GBM](#GBM), [DL](#DL), [(DRF)](#drf), [(NaiveBayes)](#nb) Specify the balanced class dataset size (as a multiple of the original dataset size). The default value is 5. 
+- **Max\_after\_balance\_size**: [(GLM](#GLM), [GBM](#GBM), [DL](#DL), [DRF](#drf), [NaiveBayes)](#nb) Specify the balanced class dataset size (as a multiple of the original dataset size). The default value is 5. 
 
-- **Ntrees**: [(GBM)](#GBM), [(DRF)](#drf) Specify the number of trees. For Grid Search, use comma-separated values (for example: 50,100,150,200). The default value is 50. 
+- **Ntrees**: [(GBM](#GBM), [DRF)](#drf) Specify the number of trees. For Grid Search, use comma-separated values (for example: 50,100,150,200). The default value is 50. 
 
-- **Max\_depth**: [(GBM)](#GBM), [(DRF)](#drf) Specify the maximum tree depth. For Grid Search, use comma-separated values (for example: 5,7). For GBM, the default value is 5. For DRF, the default value is 20. 
+- **Max\_depth**: [(GBM](#GBM), [DRF)](#drf) Specify the maximum tree depth. For Grid Search, use comma-separated values (for example: 5,7). For GBM, the default value is 5. For DRF, the default value is 20. 
 
-- **Min\_rows**: [(GBM)](#GBM), [(DRF)](#drf) Specify the minimum number of observations for a leaf ("nodesize" in R). For Grid Search, use comma-separated values. The default value is 10. 
+- **Min\_rows**: [(GBM](#GBM), [DRF)](#drf) Specify the minimum number of observations for a leaf ("nodesize" in R). For Grid Search, use comma-separated values. The default value is 10. 
 
-- **Nbins**: [(GBM)](#GBM), [(DRF)](#drf) Specify the number of bins for the histogram. The default value is 20. 
+- **Nbins**: [(GBM](#GBM), [DRF)](#drf) Specify the number of bins for the histogram. The default value is 20. 
 
 - **Mtries**: [(DRF)](#drf) Specify the columns to randomly select at each level. To use the square root of the columns, enter `-1`.  The default value is -1.  
 
 - **Sample\_rate**: [(DRF)](#drf) Specify the sample rate. The range is 0 to 1.0 and the default value is 0.6666667. 
-
-- **Do_grpsplit**: [(DRF)](#drf) To check non-contiguous group splits for categorical predictors, check this checkbox. The default setting is disabled. 
 
 - **Build\_tree\_one\_node**: [(DRF)](#drf) To run on a single node, check this checkbox. This is suitable for small datasets as there is no network overhead but fewer CPUs are used. The default setting is disabled. 
 
@@ -359,18 +358,18 @@ The available options vary depending on the selected model. If an option is only
 
 - **Variable_importance**: ([GBM](#GBM), [DL](#DL)) Check this checkbox to compute variable importance. This option is not selected by default. 
 
-- **K**: [(K-Means)](#Kmeans), [(PCA)](#pca) For K-Means, specify the number of clusters. The K-Means default is 0. For PCA, specify the rank of matrix approximation. The PCA default is 1.  
+- **K**: [(K-Means](#Kmeans), [PCA)](#pca) For K-Means, specify the number of clusters. The K-Means default is 0. For PCA, specify the rank of matrix approximation. The PCA default is 1.  
 
 - **Gamma**: [(PCA)](#pca) Specify the regularization weight for PCA. The default is 0. 
 
-- **Max_iterations**: [(K-Means)](#Kmeans), [(PCA)](#pca) Specify the number of training iterations. The default is 1000.
+- **Max_iterations**: [(K-Means](#Kmeans), [PCA)](#pca) Specify the number of training iterations. The default is 1000.
 
-- **Max_iters**: [(GLM)](#GLM) Specify the number of training iterations. The default is 50.  
+- **Max_iter**: [(GLM)](#GLM) Specify the number of training iterations. The default is 50.  
 
-- **Init**: [(K-Means)](#Kmeans), [(PCA)](#pca) Select the initialization mode For K-Means, the options are Furthest, PlusPlus, or None. For PCA, the options are PlusPlus, User, or None. 
+- **Init**: [(K-Means](#Kmeans), [PCA)](#pca) Select the initialization mode. For K-Means, the options are Furthest, PlusPlus, or None. For PCA, the options are PlusPlus, User, or None. 
 **Note**: If PlusPlus is selected, the initial Y matrix is chosen by the final cluster centers from the K-Means PlusPlus algorithm. 
 
-- **Family**: [(GLM)](#GLM) Select the model type (Gaussian, Binomial, Poisson, Gamma, Tweedie, or none).
+- **Family**: [(GLM)](#GLM) Select the model type (Gaussian, Binomial, Poisson, or Gamma).
 
 - **N_folds**: ([GLM](#GLM), [DL](#DL)) Specify the number of cross-validations to perform. The default is 0. 
 
@@ -388,7 +387,7 @@ The available options vary depending on the selected model. If an option is only
 
 - **Hidden**: [(DL)](#DL) Specify the hidden layer sizes (e.g., 100,100). For Grid Search, use comma-separated values: (10,10),(20,20,20). The default value is [200,200]. 
 
-- **Epochs**: ([word2vec](#w2v), [DL](#DL)) Specify the number of times to iterate (stream) the dataset. The value can be a fraction. The default value for DL is 10.0 and 5 for word2vec. 
+- **Epochs**: ([DL](#DL)) Specify the number of times to iterate (stream) the dataset. The value can be a fraction. The default value for DL is 10.0. 
 
 - **Loss**: [(DL)](#DL) *Required* Select the loss function (MeanSquare, CrossEntropy, or MeanSqaureClassification). 
 
@@ -396,11 +395,11 @@ The available options vary depending on the selected model. If an option is only
 
 - **Max\_confusion\_matrix\_size**: [(DL)](#DL) Specify the number of classes for the confusion matrices. The default value is 20. 
 
-- **Class\_sampling\_factors**: ([GLM](#GLM), [DL](#DL)), [(DRF)](#drf), [(NaiveBayes)](#nb) Specify the per-class (in lexicographical order) over/under-sampling ratios. By default, these ratios are automatically computed during training to obtain the class balance. There is no default value. 
+- **Class\_sampling\_factors**: ([GLM](#GLM), [DL](#DL), [DRF](#drf), [NaiveBayes)](#nb) Specify the per-class (in lexicographical order) over/under-sampling ratios. By default, these ratios are automatically computed during training to obtain the class balance. There is no default value. 
 
 - **Solver**: [(GLM)](#GLM) Select the solver to use (ADMM, L\_BFGS, or none). [ADMM](http://www.stanford.edu/~boyd/papers/admm_distr_stats.html) supports more features and [L_BFGS](http://cran.r-project.org/web/packages/lbfgs/vignettes/Vignette.pdf) scales better for datasets with many columns. The default is ADMM. 
 
-- **Beta_eps**: [(GLM)](#GLM) Specify the beta epsilon value. If the L1 normalization of the current beta change is below this threshold, consider using convergence. 
+- **Beta_epsilon**: [(GLM)](#GLM) Specify the beta epsilon value. If the L1 normalization of the current beta change is below this threshold, consider using convergence. 
 
 - **Diagnostics**: [(DL)](#DL) Check this checkbox to compute the variable importances for input features (using the Gedeon method). For large networks, selecting this option can reduce speed. This option is selected by default. 
 
@@ -418,22 +417,6 @@ The available options vary depending on the selected model. If an option is only
 
 - **Reproducible**: [(DL)](#DL) To force reproducibility on small data, check this checkbox. If this option is enabled, the model takes more time to generate, since it uses only one thread. 
 
-- **Minwordfreq**: [(word2vec)](#w2v) Specify the number of times a word must appear to be included in the model. The default is 5. 
-
-- **WordModel**: [(word2vec)](#w2v) Select the model type (continuous bag of words [CBOW], SkipGram, or None). 
-
-- **NormModel**: [(word2vec)](#w2v) Select the normalization type (Hierarchical Softmax [HSM], Negative Sampling [NegSampling], or None). 
-
-- **NegSampleCnt**: [(word2vec)](#w2v) Specify the number of negative examples (for example, entering 0 would mean that the example is not used). The default value is 5. 
-
-- **Vecsize**: [(word2vec)](#w2v) Specify the word vector size. The default is 100. 
-
-- **Windowsize**: [(word2vec)](#w2v) Specify the max skip length between words. The default is 5. 
-
-- **Sentsamplerate**: [(word2vec)](#w2v) Specify the threshold for word occurences. Words with higher frequencies in the training data are randomly down-sampled. The default value is 0.001. 
-
-- **Initlearningrate**: [(word2vec)](#w2v) Specify the starting learning rate. The default is 0.05. 
-
 - **Laplace**: [(NaiveBayes)](#nb) Specify the Laplace smoothing parameter. The default value is 0. 
 
 - **Min\_sdev**: [(NaiveBayes)](#nb) Specify the minimum standard deviation to use for observations without enough data. The default value is 0.001. 
@@ -446,13 +429,9 @@ The available options vary depending on the selected model. If an option is only
 
 **Advanced Options**
 
-- **Standardize**: ([K-Means](#Kmeans), [GLM](#GLM)) To standardize the numeric columns to have mean of zero and unit variance, check this checkbox. Standardization is highly recommended; if you do not use standardization, the results can include components that are dominated by variables that appear to have larger variances relative to other attributes as a matter of scale, rather than true contribution. This option is selected by default. 
+- **Standardize**: ([K-Means](#Kmeans), [GLM](#GLM)) To standardize the numeric columns to have a mean of zero and unit variance, check this checkbox. Standardization is highly recommended; if you do not use standardization, the results can include components that are dominated by variables that appear to have larger variances relative to other attributes as a matter of scale, rather than true contribution. This option is selected by default. 
 
-- **Link**: [(GLM)](#GLM) Select a link function (Identity, Family_Default, Logit, Log, Inverse, Tweedie).
-
-- **Tweedie\_variance\_power**: ([GLM](#GLM) with Tweedie) Specify the variance power for the Tweedie model. 
-
-- **Tweedie\_link\_power**: ([GLM](#GLM) with Tweedie) Specify the Tweedie link power. 
+- **Link**: [(GLM)](#GLM) Select a link function (Family_Default, Identity, Logit, Log, Inverse).
 
 - **Alpha**: [(GLM)](#GLM) Specify the regularization distribution between L2 and L2. The default value is 0.5. 
 
@@ -530,9 +509,9 @@ The available options vary depending on the selected model. If an option is only
 
 - **Col_major**: [(DL)](#DL) Check this checkbox to use a column major weight matrix for the input layer. This option can speed up forward propagation but may reduce the speed of backpropagation. This option is not selected by default. 
 
-- **Seed**: [K-Means](#Kmeans), [GBM](#GBM), [DL](#DL), [(DRF)](#drf) Specify the random number generator (RNG) seed for algorithm components dependent on randomization. The seed is consistent for each H2O instance so that you can create models with the same starting conditions in alternative configurations. 
+- **Seed**: ([K-Means](#Kmeans), [GBM](#GBM), [DL](#DL), [DRF](#drf)) Specify the random number generator (RNG) seed for algorithm components dependent on randomization. The seed is consistent for each H2O instance so that you can create models with the same starting conditions in alternative configurations. 
 
-- **Prior1**: [(GLM)](#GLM) Specify prior probability for y ==1. Use this parameter for logistic regression if the data has been sampled and the mean of response does not reflect reality. The default value is 0.0. 
+- **Prior**: [(GLM)](#GLM) Specify prior probability for y ==1. Use this parameter for logistic regression if the data has been sampled and the mean of response does not reflect reality. The default value is 0.0. 
 
 - **NLambdas**: [(GLM)](#GLM) Specify the number of lambdas to use in the search. The default value is -1. 
 

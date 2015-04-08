@@ -31,7 +31,9 @@ import static java.lang.Double.isNaN;
 public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLearningModel.DeepLearningParameters,DeepLearningModel.DeepLearningModelOutput> implements Model.DeepFeatures {
 
   public static class DeepLearningParameters extends SupervisedModel.SupervisedParameters {
-    public int _n_folds;
+    // public int _n_folds;
+    public int getNumFolds() { return 0; }
+
     public boolean _keep_cross_validation_splits;
 
     /**
@@ -438,7 +440,7 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
       boolean classification = expensive || dl._nclass != 0 ? dl.isClassifier() : _loss == Loss.CrossEntropy;
       if (_hidden == null || _hidden.length == 0) dl.error("_hidden", "There must be at least one hidden layer.");
 
-      for( int h : _hidden ) if( h==0 ) dl.error("_hidden", "Hidden layer size must be >0.");
+      for( int h : _hidden ) if( h<=0 ) dl.error("_hidden", "Hidden layer size must be positive.");
 
       if (!_autoencoder) {
         if (_valid == null)
@@ -458,7 +460,7 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
 
 
         if (!classification && _valid != null || _valid == null)
-          dl.hide("_score_validation_sampling", "score_validation_sampling requires regression and a validation frame OR no validation frame.");
+          dl.hide("_score_validation_sampling", "score_validation_sampling requires classification and a validation frame.");
       }
 
       // Auto-fill defaults
@@ -468,8 +470,7 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
         if (_activation == Activation.TanhWithDropout || _activation == Activation.MaxoutWithDropout || _activation == Activation.RectifierWithDropout) {
           if (expensive) {
             _hidden_dropout_ratios = new double[_hidden.length];
-            if (!_quiet_mode)
-              dl.info("_hidden_dropout_ratios", "Automatically setting all hidden dropout ratios to 0.5.");
+            dl.info("_hidden_dropout_ratios", "Automatically setting all hidden dropout ratios to 0.5.");
             Arrays.fill(_hidden_dropout_ratios, 0.5);
           }
         }
@@ -482,7 +483,7 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
       }
 
       if (_input_dropout_ratio < 0 || _input_dropout_ratio >= 1)
-        dl.error("_input_dropout_ratio", "Input dropout must be in [0,1).");
+        dl.error("_input_dropout_ratio", "Input dropout must be >= 0 and <1.");
 
       if (H2O.CLOUD.size() == 1 && _replicate_training_data) {
         dl.hide("_replicate_training_data", "replicate_training_data is only valid with cloud size greater than 1.");
@@ -500,18 +501,18 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
       }
 
       if (_autoencoder) {
-        dl.hide("_use_all_factor_levels", "use_all_factor_levels is unsupported in combination with autoencoder.");
+        dl.hide("_use_all_factor_levels", "use_all_factor_levels is mandatory in combination with autoencoder.");
       }
       if (!_use_all_factor_levels && _autoencoder ) {
         if (expensive) {
-          dl.warn("_use_all_factor_levels", "Enabling all_factor_levels for auto-encoders.");
+          dl.warn("_use_all_factor_levels", "Automatically enabling all_factor_levels for auto-encoders.");
           _use_all_factor_levels = true;
         }
       }
 
-      if (_n_folds != 0)
+      if (getNumFolds() != 0)
         dl.hide("_override_with_best_model", "override_with_best_model is unsupported in combination with n-fold cross-validation.");
-      if(_override_with_best_model && _n_folds != 0) {
+      if(_override_with_best_model && getNumFolds() != 0) {
         if (expensive) {
           dl.warn("_override_with_best_model", "Disabling override_with_best_model in combination with n-fold cross-validation.");
           _override_with_best_model = false;
@@ -531,43 +532,45 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
         dl.hide("_rho", "rho is only used with adaptive_rate.");
         dl.hide("_epsilon", "epsilon is only used with adaptive_rate.");
       }
-      if (!_quiet_mode) {
-        if (_adaptive_rate) {
-          if (expensive) {
-            dl.info("_adaptive_rate", "Using automatic learning rate.  Ignoring the following input parameters: "
-                    + "rate, rate_decay, rate_annealing, momentum_start, momentum_ramp, momentum_stable, nesterov_accelerated_gradient.");
-            _momentum_start = 0;
-            _momentum_stable = 0;
-          }
-        } else {
-          if (expensive) {
-            dl.info("_adaptive_rate", "Using manual learning rate.  Ignoring the following input parameters: "
-                    + "rho, epsilon.");
-            _rho = 0;
-            _epsilon = 0;
-          }
+      if (_adaptive_rate) {
+        if (expensive) {
+          dl.info("_adaptive_rate", "Using automatic learning rate.  Ignoring the following input parameters: "
+                  + "rate, rate_decay, rate_annealing, momentum_start, momentum_ramp, momentum_stable, nesterov_accelerated_gradient.");
+          _momentum_start = 0;
+          _momentum_stable = 0;
         }
+      } else {
+        if (expensive) {
+          dl.info("_adaptive_rate", "Using manual learning rate.  Ignoring the following input parameters: "
+                  + "rho, epsilon.");
+          _rho = 0;
+          _epsilon = 0;
+        }
+      }
 
-        if (_initial_weight_distribution == InitialWeightDistribution.UniformAdaptive) {
-          dl.hide("_initial_weight_scale", "initial_weight_scale is not used if initial_weight_distribution == UniformAdaptive.");
-        }
-        if (_n_folds != 0) {
-          if (expensive) {
-            if (_override_with_best_model) {
-              dl.warn("_override_with_best_model", "Automatically disabling override_with_best_model, since the final model is the only scored model with n-fold cross-validation.");
-              _override_with_best_model = false;
-            }
+      if (_initial_weight_distribution == InitialWeightDistribution.UniformAdaptive) {
+        dl.hide("_initial_weight_scale", "initial_weight_scale is not used if initial_weight_distribution == UniformAdaptive.");
+      }
+      if (getNumFolds() != 0) {
+        dl.error("_n_folds", "n_folds is not yet implemented.");
+        if (expensive) {
+          if (_override_with_best_model) {
+            dl.warn("_override_with_best_model", "Automatically disabling override_with_best_model, since the final model is the only scored model with n-fold cross-validation.");
+            _override_with_best_model = false;
           }
         }
       }
 
       if (_loss == Loss.Automatic) {
-        if (expensive) _loss = (classification && !_autoencoder) ? Loss.CrossEntropy : Loss.MeanSquare;
+        if (expensive) {
+          _loss = (classification && !_autoencoder) ? Loss.CrossEntropy : Loss.MeanSquare;
+          dl.info("_loss", "Automatically setting loss function to " + _loss);
+        }
       }
 
       if (_loss == null) {
         if (expensive || dl._nclass != 0) {
-          dl.error("_loss", "Loss function must be specified. Try CrossEntropy for categorical response (classification), MeanSquare for numerical response (regression).");
+          dl.error("_loss", "Loss function must be specified. Try CrossEntropy for categorical response (classification), MeanSquare, Absolute or Huber for numerical response (regression).");
         }
         //otherwise, we might not know whether classification=true or false (from R, for example, the training data isn't known when init(false) is called).
       } else {
@@ -575,14 +578,10 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
           dl.error("_loss", "Cannot use CrossEntropy loss for auto-encoder.");
         if (!classification && _loss == Loss.CrossEntropy)
           dl.error("_loss", "For CrossEntropy loss, the response must be categorical.");
-//        if (classification && _loss == Loss.Huber)
-//          dl.error("_loss", "For Huber loss, the response must be numerical.");
       }
-      if (_autoencoder && _loss == Loss.CrossEntropy)
-        dl.error("_loss", "Must use MeanSquare loss function for auto-encoder.");
 
       if (!classification && _loss == Loss.CrossEntropy)
-        dl.error("_loss", "For CrossEntropy loss, the response must be categorical. Either select MeanSquare loss for regression, or use a categorical response.");
+        dl.error("_loss", "For CrossEntropy loss, the response must be categorical. Either select MeanSquare, Absolute or Huber loss for regression, or use a categorical response.");
 
       if (_score_training_samples < 0) {
         dl.error("_score_training_samples", "Number of training samples for scoring must be >= 0 (0 for all).");
@@ -608,11 +607,11 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
       if (_max_categorical_features < 1) dl.error("_max_categorical_features", "max_categorical_features must be at least 1.");
 
       if (!_sparse && _col_major) {
-        if (!_quiet_mode) dl.error("_col_major", "Cannot use column major storage for non-sparse data handling.");
+        dl.error("_col_major", "Cannot use column major storage for non-sparse data handling.");
       }
       if (expensive) {
         if (!classification && _balance_classes) {
-          dl.error("_balance_classes", "balance_classes requires classification to be enabled.");
+          dl.error("_balance_classes", "balance_classes requires classification.");
         }
         if (_class_sampling_factors != null && !_balance_classes) {
           dl.error("_class_sampling_factors", "class_sampling_factors requires balance_classes to be enabled.");
@@ -620,8 +619,9 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
       }
       if (_reproducible) {
         if (expensive) {
-          if (!_quiet_mode)
-            Log.info("Automatically enabling force_load_balancing, disabling single_node_mode and replicate_training_data\nand setting train_samples_per_iteration to -1 to enforce reproducibility.");
+          dl.info("_reproducibility",
+                  "Automatically enabling force_load_balancing, disabling single_node_mode and replicate_training_data\n"
+                          +"and setting train_samples_per_iteration to -1 to enforce reproducibility.");
           _force_load_balance = true;
           _single_node_mode = false;
           _train_samples_per_iteration = -1;
@@ -898,7 +898,7 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
         colTypes.add("double");
         colFormat.add("%.5f");
       }
-    } else if (get_params()._n_folds > 0) {
+    } else if (get_params().getNumFolds() > 0) {
       colHeaders.add("Cross-Validation MSE"); colTypes.add("double"); colFormat.add("%.5f");
 //      colHeaders.add("Validation R^2"); colTypes.add("double"); colFormat.add("%g");
       if (_output.getModelCategory() == ModelCategory.Binomial) {
@@ -984,7 +984,7 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
           table.set(row, col++, e.valid_err);
         }
       }
-      else if(get_params()._n_folds > 1) {
+      else if(get_params().getNumFolds() > 1) {
         throw H2O.unimpl("n_folds >= 2 is not (yet) implemented.");
       }
       row++;
@@ -1121,7 +1121,7 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
           Log.warn(num_input + " input features" + (dinfo._cats > 0 ? " (after categorical one-hot encoding)" : "") + ". Can be slow and require a lot of memory.");
         }
         if (levels[levels.length-1] > 0) {
-          int levelcutoff = levels[levels.length-1-Math.min(10, levels.length)];
+          int levelcutoff = levels[levels.length-1-Math.min(10, levels.length-1)];
           int count = 0;
           for (int i=0; i<dinfo._adaptedFrame.numCols() - (get_params()._autoencoder ? 0 : 1) && count < 10; ++i) {
             if (dinfo._adaptedFrame.domains()[i] != null && dinfo._adaptedFrame.domains()[i].length >= levelcutoff) {
@@ -1598,12 +1598,12 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
     DKV.put(dinfo._key,dinfo);
     model_info = new DeepLearningModelInfo(parms, dinfo, classification, train, valid);
     actual_best_model_key = Key.makeUserHidden(Key.make());
-    if (parms._n_folds != 0) actual_best_model_key = null;
+    if (parms.getNumFolds() != 0) actual_best_model_key = null;
     if (!parms._autoencoder) {
       errors = new DeepLearningScoring[1];
       errors[0] = new DeepLearningScoring();
-      errors[0].validation = (valid != null);
-      errors[0].num_folds = parms._n_folds;
+      errors[0].validation = (parms._valid != null);
+      errors[0].num_folds = parms.getNumFolds();
       _output.errors = last_scored();
       _output.scoring_history = createScoringHistoryTable(errors);
       _output.variable_importances = calcVarImp(last_scored().variable_importances);

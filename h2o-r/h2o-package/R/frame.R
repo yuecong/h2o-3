@@ -351,23 +351,65 @@ setMethod("%in%", "H2OFrame", function(x, table) match(x, table, nomatch = 0) > 
 #-----------------------------------------------------------------------------------------------------------------------
 
 # TODO: s4 year, month impls as well?
-#h2o.year <- function(x){
-#  if( missing(x) ) stop('must specify x')
-#  if( !class(x) == 'H2OFrame' ) stop('x must be an h2o data object')
-#  res1 <- .h2o.unary_op('year', x)
-#  .h2o.binary_op("-", res1, 1900)
-#}
-#
-#h2o.month <- function(x){
-#  if( missing(x) ) stop('must specify x')
-#  if( !class(x) == 'H2OFrame' ) stop('x must be an h2o data object')
-#  .h2o.unary_op('month', x)
-#}
-#
-#year <- function(x) UseMethod('year', x)
-#year.H2OFrame <- h2o.year
-#month <- function(x) UseMethod('month', x)
-#month.H2OFrame <- h2o.month
+#' @export
+h2o.year <- function(x){
+  if( missing(x) ) stop('must specify x')
+  if( !class(x) == 'H2OFrame' ) stop('x must be an h2o data object')
+  res1 <- .h2o.unary_frame_op('year', x)
+  .h2o.binary_frame_op("-", res1, 1900)
+}
+
+#' @export
+h2o.month <- function(x){
+  if( missing(x) ) stop('must specify x')
+  if( !class(x) == 'H2OFrame' ) stop('x must be an h2o data object')
+  .h2o.unary_frame_op('month', x)
+}
+#' @export
+year <- function(x) UseMethod('year', x)
+#' @export
+year.H2OFrame <- h2o.year
+#' @export
+month <- function(x) UseMethod('month', x)
+#' @export
+month.H2OFrame <- h2o.month
+
+#' @export
+as.Date.H2OFrame <- function(x, format, ...) {
+  if(!is.character(format)) stop("format must be a string")
+
+  expr = paste("as.Date(", paste(x@key, deparse(eval(format, envir = parent.frame())), sep = ","), ")", sep = "")
+  .h2o.nary_frame_op("as.Date", x, format, ...)
+  #res = .h2o.__exec2(x@h2o, expr)
+  #res <- .h2o.exec2(res$dest_key, h2o = x@h2o, res$dest_key)
+  #res@logic <- FALSE
+  #return(res)
+}
+
+#' @export
+h2o.setTimezone <- function(client, tz) {
+  if(class(client) != "H2OClient") stop("client must be a H2OClient object")
+  if (!is.character(tz)) stop('tz must be a string')
+
+  res = .h2o.__remoteSend(client, .h2o.__PAGE_SETTIMEZONE, tz = tz)
+  res$tz
+}
+
+#' @export
+h2o.getTimezone <- function(client) {
+  if(class(client) != "H2OClient") stop("client must be a H2OClient object")
+
+  res = .h2o.__remoteSend(client, .h2o.__PAGE_GETTIMEZONE)
+  res$tz
+}
+
+#' @export
+h2o.listTimezones <- function(client) {
+  if(class(client) != "H2OClient") stop("client must be a H2OClient object")
+
+  res = .h2o.__remoteSend(client, .h2o.__PAGE_LISTTIMEZONES)
+  cat(res$tzlist)
+}
 #
 #diff.H2OFrame <- function(x, lag = 1, differences = 1, ...) {
 #  if(!is.numeric(lag)) stop("lag must be numeric")
@@ -552,6 +594,16 @@ subset.H2OFrame <- function(x, subset, select, drop = FALSE, ...) {
 setMethod("[<-", "H2OFrame", function(x, i, j, ..., value) {
   missingI <- missing(i)
   missingJ <- missing(j)
+  if( !missingJ && is.na(j) ) j <- as.list(match.call())$j
+
+  updateColName <- FALSE
+  idx <- 0
+  name <- ""
+  if( !missingI && is.character(i) && missingJ ) {  ## case where fr["baz"] <- qux
+    missingI <- TRUE
+    missingJ <- FALSE
+    j <- i
+  }
 
   if(!missingI && !is.numeric(i))
     stop("`i` must be missing or a numeric vector")
@@ -560,14 +612,51 @@ setMethod("[<-", "H2OFrame", function(x, i, j, ..., value) {
   if(!is(value, "H2OFrame") && !is.numeric(value) && !is.character(value))
     stop("`value` can only be an H2OFrame object or a numeric or character vector")
 
-  if (missingI && missingJ)
+  if (missingI && missingJ) {
     sub <- x
-  else if (missingI)
-    sub <- x[,j]
-  else if (missingJ)
+  } else if (missingI) {
+    name <- j
+    j <- match(j, colnames(x))
+    if( any(is.na(j)) ) {
+      if( is.numeric(name) ) {
+       idx <- name
+      } else {
+        updateColName <- TRUE
+        idx <- ncol(x)+1
+      }
+      j <- .eval(idx,parent.frame())
+      op  <- new("ASTApply", op = "[")
+      ast <- new("ASTNode", root = op, children = list(.get(x), deparse("null"), j))
+      mutable <- new("H2OFrameMutableState", ast = ast, nrows = NA_integer_, ncols = NA_integer_, col_names = NA_character_)
+      finalizers <- x@finalizers
+      sub <-  .newH2OObject("H2OFrame", conn = x@conn, key = .key.make(x@conn, "subset"),
+                      finalizers = finalizers, linkToGC = TRUE, mutable = mutable)
+    } else {
+      sub <- x[,j]
+    }
+  } else if (missingJ) {
     sub <- x[i,]
-  else
-    sub <- x[i, j]
+  } else {
+    name <- j
+    j <- match(j, colnames(x))
+    if( any(is.na(j)) ) {
+      if( is.numeric(name) ) {
+        idx <- name
+      } else {
+        updateColName <- TRUE
+        idx <- ncol(x)+1
+      }
+      j <- .eval(idx,parent.frame())
+      op  <- new("ASTApply", op = "[")
+      ast <- new("ASTNode", root = op, children = list(.get(x), .eval(i,parent.frame()), j))
+      mutable <- new("H2OFrameMutableState", ast = ast, nrows = NA_integer_, ncols = NA_integer_, col_names = NA_character_)
+      finalizers <- x@finalizers
+      sub <-  .newH2OObject("H2OFrame", conn = x@conn, key = .key.make(x@conn, "subset"),
+                      finalizers = finalizers, linkToGC = TRUE, mutable = mutable)
+    } else {
+      sub <- x[i, j]
+    }
+  }
 
   lhs <- .get(sub)
   finalizers <- sub@finalizers
@@ -579,7 +668,10 @@ setMethod("[<-", "H2OFrame", function(x, i, j, ..., value) {
 
   op  <- new("ASTApply", op = "=")
   ast <- new("ASTNode", root = op, children = list(lhs, rhs))
-  .h2o.replace.frame(conn = x@conn, ast = ast, key = x@key, finalizers = finalizers)
+  res <- .h2o.replace.frame(conn = x@conn, ast = ast, key = x@key, finalizers = finalizers)
+
+  if( updateColName ) { colnames(res)[idx] <- name }
+  res
 })
 
 #' @rdname H2OFrame-Extract
@@ -960,8 +1052,8 @@ setMethod("is.factor", "H2OFrame", function(x) {
 #'    quantile(prostate.hex[,i])
 #' @export
 quantile.H2OFrame <- function(x,
-                     #AUTOGENERATED params
-                     probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.5, 0.667, 0.75, 0.9, 0.95, 0.99),
+                     # AUTOGENERATED params
+                     probs = c(0.001, 0.01, 0.1, 0.25, 0.333, 0.5, 0.667, 0.75, 0.9, 0.99, 0.999),
                      ...)
 {
   # verify input parameters
@@ -973,17 +1065,11 @@ quantile.H2OFrame <- function(x,
     stop("`probs` must be between 0 and 1 exclusive")
   #if(type != 2 && type != 7) stop("type must be either 2 (mean interpolation) or 7 (linear interpolation)")
   #if(type != 7) stop("Unimplemented: Only type 7 (linear interpolation) is supported from the console")
-
-  parms <- as.list(match.call()[-1L])
-
-  training_frame <- x
-  .quantile.map <- c("x" = "training_frame")
-  names(parms) <- lapply(names(parms), function(i) { if( i %in% names(.quantile.map) ) i <- .quantile.map[[i]]; i })
-
-  model <- .h2o.createModel(x@conn, "quantile", parms, parent.frame())
-
-  col <- model@model$quantile[[1L]]
-  names(col) <- paste0(100*probs, "%")
+  res <- .h2o.nary_frame_op("quantile", x, probs)
+  
+  res <- as.matrix(res)
+  col <- as.numeric(res[,-1])
+  names(col) <- paste0(100*res[,1], "%")
   col
 }
 
@@ -1010,6 +1096,7 @@ quantile.H2OFrame <- function(x,
 setMethod("summary", "H2OFrame", function(object, ...) {
   digits <- 12L
   cnames <- colnames(object)
+  missing <- list()
   cols <- sapply(cnames, function(x) {
       res <- .h2o.__remoteSend(object@conn, .h2o.__COL_SUMMARY(object@key, x), method = "GET")
       col <- res$frames[[1]]$columns[[1]]
@@ -1023,7 +1110,8 @@ setMethod("summary", "H2OFrame", function(object, ...) {
           params = format(signif(as.numeric(c(min(col$mins), col$percentiles[4], col$percentiles[6], col$mean, col$percentiles[8], max(col$maxs, na.rm = T))), digits), digits = 4)
         c(paste0("Min.   :", params[1], "  "), paste0("1st Qu.:", params[2], "  "),
           paste0("Median :", params[3], "  "), paste0("Mean   :", params[4], "  "),
-          paste0("3rd Qu.:", params[5], "  "), paste0("Max.   :", params[6], "  "))
+          paste0("3rd Qu.:", params[5], "  "), paste0("Max.   :", params[6], "  "), 
+          if(!is.null(col$missing_count) && col$missing_count > 0) paste0("NA's   :", col$missing_count, "  ") else NA)
       } else {
         top.ix <- sort.int(col$histogram_bins, decreasing = TRUE, index.return = TRUE)$ix[1:6]
         if(is.null(col$domain)) domains <- top.ix[1:6] else domains <- col$domain[top.ix]
@@ -1043,6 +1131,7 @@ setMethod("summary", "H2OFrame", function(object, ...) {
                         sapply(counts, function(y) { ifelse(width[2] == nchar(y), "", paste(rep(' ', width[2] - nchar(y)), collapse='')) }),
                           counts, " ")
         result[is.na(domains)] <- NA
+        result <- c(result, NA)   # Pad end to accommodate potential additional row of NA counts in numeric cols
         result
       }
     })
@@ -1330,6 +1419,10 @@ setMethod("as.numeric", "H2OFrame", function(x)
 setMethod("ifelse", signature(test="H2OFrame", yes="ANY", no="ANY"), function(test, yes, no)
   .h2o.nary_row_op("ifelse", test, yes, no))
 
+#' @export
+setMethod("ifelse", signature(test="ANY",yes="H2OFrame", no="H2OFrame"), function(test,yes,no)
+  .h2o.nary_frame_op("ifelse", test, yes, no))
+
 #' Combine H2O Datasets by Columns
 #'
 #' Takes a sequence of H2O data sets and combines them by column
@@ -1352,9 +1445,19 @@ NULL
 #' @rdname h2o.cbind
 #' @export
 h2o.cbind <- function(...) {
-  klasses <- unlist(lapply(list(...), function(l) is(l, "H2OFrame")))
+  li <- list(...)
+  use.args <- FALSE
+  if( length(li)==1 && is.list(li[[1]]) ) {
+    li <- li[[1]]
+    use.args <- TRUE
+  }
+  klasses <- unlist(lapply(li, function(l) is(l, "H2OFrame")))
   if (any(!klasses)) stop("`h2o.cbind` accepts only of H2OFrame objects")
-  .h2o.nary_frame_op("cbind", ...)
+  if( use.args ) {
+    .h2o.nary_frame_op("cbind", .args=li)
+  } else {
+    .h2o.nary_frame_op("cbind", ...)
+  }
 }
 
 #' Set a Factor Column to Level
@@ -1428,10 +1531,13 @@ h2o.merge <- function (x, y, all.x = FALSE, all.y = FALSE) {
   out
 }
 
-
-h2o.groupBy <- function(data, columns, aggregates=list()) {
+#'
+#' Group By
+#'
+#' @export
+h2o.group_by <- function(data, ..., gb.control=list(na.methods=NULL, col.names=NULL)) {
   if( !is(data, "H2OFrame") )
-    stop("`data` must be of type H2OFrame")
+      stop("`data` must be of type H2OFrame")
 
   # handle the data
   mktmp <- !.is.eval(data)
@@ -1439,58 +1545,98 @@ h2o.groupBy <- function(data, columns, aggregates=list()) {
     .h2o.eval.frame(conn=h2o.getConnection(), ast=data@mutable$ast, key=data@key)
   }
 
-  # handle the columns
-  # we accept: c('col1', 'col2'), 1:2, c(1,2) as column names.
-  if(is.character(columns)) {
-    vars <- match(columns, colnames(data))
-    if (any(is.na(vars)))
-      stop('No column named ', columns, ' in ', substitute(data), '.')
-  } else if(is.integer(columns)) {
-    vars <- columns
-  } else if(is.numeric(columns)) {   # this will happen eg c(1,2,3)
-    vars <- as.integer(columns)
-  }
-  # Change cols from 1 base notation to 0 base notation then verify the column is within range of the dataset
-  vars <- vars - 1L
-  if(vars < 0L || vars > (ncol(data)-1L))
-    stop('Column ', vars, ' out of range for frame columns ', ncol(data), '.')
+  by <- substitute(list(...))
+  by[[1]] <- NULL  # drop the wrapping list()
 
-  # handle the aggregates list
-  # aggregates is a list of lists:
-  #  example: aggregates = list(min_col1 = list("min", "col1", "ignore"), maxCol2 = list("max", "col2", "all"))
+  nAggs <- length(by)  # the number of aggregates
 
-  # two things to do: 1. each sublist must be exactly length 3; and 2. if the second arg in a sublist is a character, then swap it out for the column index in the data frame.
-  # aggs now looks like this: list( list(agg,col,na,name), ...)
-  nAggs <- length(aggregates)
-  aggs <- lapply(seq_along(aggregates), function(idx) {
-    l <- aggregates[[idx]]
-    if( length(l) != 3 )
-      stop("Poorly specified aggregation: must be of shape list(`agg`, `column`, `na.method`)")
-    if( is.character(l[[2]]) ) {
-      colname <- l[[2]]
-      l[[2]] <- match(colname, colnames(data)) - 1  # 1 -> 0 based index
-      if( is.na(l[[2]]) )
-        stop("No such column found: ", colname)
+  # for each aggregate, build this list: (agg,col.idx,na.method,col.name)
+  agg.methods <- unlist(lapply(by, function(agg) as.character(agg[[1]]) ))
+  col.idxs    <- unlist(lapply(by, function(agg) {
+    # to get the column index, check if the column passed in the agg (@ agg[[2]]) is numeric
+    # if numeric, then eval it and return
+    # otherwise, as.character the *name* and look it up in colnames(data) and fail/return appropriately
+    if( is.numeric(agg[[2]]) || is.integer(agg[[2]]) ) { return(eval(agg[[2]])) }
+
+    col.name <- as.character(agg[[2]])
+    col.idx <- match(col.name, colnames(data))
+
+    # no such column, stop!
+    if( is.na(col.idx) ) stop('No column named ', col.name, ' in ', substitute(data), '.')
+
+    # got a good column index, return it.
+    col.idx
+  }))
+
+  # default to "all" na.method
+  na.methods.defaults <- rep("all", nAggs)
+
+  # default to agg_col.name for the column names
+  col.names.defaults  <- paste0(agg.methods, "_", colnames(data)[col.idxs])
+
+  # 1 -> 0 based indexing of columns
+  col.idxs <- sort(col.idxs) - 1
+
+  ### NA handling ###
+
+  # go with defaults
+  if( is.null(gb.control$na.methods) ) {
+    gb.control$na.methods <- na.methods.defaults
+
+  # have fewer na.methods passed in than aggregates to compute -- pad with defaults
+  } else if( length(gb.control$na.methods) < nAggs ) {
+
+    # special case where only 1 method was passed, and so that is the method for all aggregates
+    if( length(gb.control$na.methods) == 1L ) {
+      gb.control$na.methods <- rep(gb.control$na.methods, nAggs)
     } else {
-      cid <- l[[2]]
-      l[[2]] <- as.numeric(l[[2]]) - 1
-      if( l[[2]] < 0 || l[[2]] > ncol(data) )
-        stop("No such column found at index: ", cid)
+      n.missing <- nAggs - length(gb.control$na.methods)
+      gb.control$na.methods <- c(gb.control$na.methods, rep("all", n.missing))
     }
-    name <- names(aggregates)[idx]
-    if( is.null(name) ) name <- ""
-    if( is.na(name) ) name <- ""
-    c(l,name)
-  })
+
+  # have more na.methods than aggregates -- rm extras
+  } else if( length(gb.control$na.methods) > nAggs ) {
+    gb.control$na.methods <- gb.control$na.methods[1:nAggs]
+  } else {
+    stop("Shouldn't be here.")
+  }
+
+  ### End NA handling ###
+
+  ### Column Name Handling ###
+
+  # go with defaults
+  if( is.null(gb.control$col.names) ) {
+    gb.control$col.names <- col.names.defaults
+
+  # have fewer col.names passed in than aggregates -- pad with defaults
+  } else if( length(gb.control$col.names) < nAggs ) {
+
+    # no special case for only 1 column!
+    n.missing <- nAggs - length(gb.control$col.names)
+    gb.control$col.names <- c(gb.control$col.names, col.names.defaults[(nAggs-n.missing+1):nAggs])
+
+  # have more col.names than aggregates -- rm extras
+  } else if( length(gb.control$col.names) > nAggs ) {
+    gb.control$col.names <- gb.control$col.names[1:nAggs]
+  }
+
+  ### End Column Name handling ###
+
+
+  # Build the aggregates! reminder => build this list: (agg,col.idx,na.method,col.name)
+  aggs <- unlist(recursive=F, lapply(1:nAggs, function(idx) {
+    list(agg.methods[idx], eval(col.idxs[idx]), gb.control$na.methods[idx], gb.control$col.names[idx])
+  }))
 
   # create the AGG AST
   op <- new("ASTApply", op="agg")
-  children <- list(c(paste0('#',nAggs), unlist(lapply(aggs, function(l) { .args.to.ast(.args=l)}))))
+  children <- list( c(paste0('#',nAggs), unlist( .args.to.ast(.args=aggs) ) ) )
   AGG <- new("ASTNode", root=op, children=children)
 
   # create the group by AST
   op <- new("ASTApply", op="GB")
-  vars <- .args.to.ast(vars)
+  vars <- .args.to.ast(col.idxs)
   GB <- new("ASTNode", root=op, children=list(.args.to.ast(data),vars,AGG))
 
   mutable <- new("H2OFrameMutableState", ast = GB, nrows = NA_integer_, ncols = NA_integer_, col_names = NA_character_)
@@ -1499,6 +1645,79 @@ h2o.groupBy <- function(data, columns, aggregates=list()) {
   .newH2OObject("H2OFrame", conn = conn, key = .key.make(conn, "group_by"),
                 finalizers = finalizers, linkToGC = TRUE, mutable = mutable)
 }
+
+
+# old version of h2o.groupBy -- not user friendly.
+#h2o.groupBy <- function(data, columns, aggregates=list()) {
+#  if( !is(data, "H2OFrame") )
+#    stop("`data` must be of type H2OFrame")
+#
+#  # handle the data
+#  mktmp <- !.is.eval(data)
+#  if( mktmp ) {
+#    .h2o.eval.frame(conn=h2o.getConnection(), ast=data@mutable$ast, key=data@key)
+#  }
+#
+#  # handle the columns
+#  # we accept: c('col1', 'col2'), 1:2, c(1,2) as column names.
+#  if(is.character(columns)) {
+#    vars <- match(columns, colnames(data))
+#    if (any(is.na(vars)))
+#      stop('No column named ', columns, ' in ', substitute(data), '.')
+#  } else if(is.integer(columns)) {
+#    vars <- columns
+#  } else if(is.numeric(columns)) {   # this will happen eg c(1,2,3)
+#    vars <- as.integer(columns)
+#  }
+#  # Change cols from 1 base notation to 0 base notation then verify the column is within range of the dataset
+#  vars <- vars - 1L
+#  if(vars < 0L || vars > (ncol(data)-1L))
+#    stop('Column ', vars, ' out of range for frame columns ', ncol(data), '.')
+#
+#  # handle the aggregates list
+#  # aggregates is a list of lists:
+#  #  example: aggregates = list(min_col1 = list("min", "col1", "ignore"), maxCol2 = list("max", "col2", "all"))
+#
+#  # two things to do: 1. each sublist must be exactly length 3; and 2. if the second arg in a sublist is a character, then swap it out for the column index in the data frame.
+#  # aggs now looks like this: list( list(agg,col,na,name), ...)
+#  nAggs <- length(aggregates)
+#  aggs <- lapply(seq_along(aggregates), function(idx) {
+#    l <- aggregates[[idx]]
+#    if( length(l) != 3 )
+#      stop("Poorly specified aggregation: must be of shape list(`agg`, `column`, `na.method`)")
+#    if( is.character(l[[2]]) ) {
+#      colname <- l[[2]]
+#      l[[2]] <- match(colname, colnames(data)) - 1  # 1 -> 0 based index
+#      if( is.na(l[[2]]) )
+#        stop("No such column found: ", colname)
+#    } else {
+#      cid <- l[[2]]
+#      l[[2]] <- as.numeric(l[[2]]) - 1
+#      if( l[[2]] < 0 || l[[2]] > ncol(data) )
+#        stop("No such column found at index: ", cid)
+#    }
+#    name <- names(aggregates)[idx]
+#    if( is.null(name) ) name <- ""
+#    if( is.na(name) ) name <- ""
+#    c(l,name)
+#  })
+#
+#  # create the AGG AST
+#  op <- new("ASTApply", op="agg")
+#  children <- list(c(paste0('#',nAggs), unlist(lapply(aggs, function(l) { .args.to.ast(.args=l)}))))
+#  AGG <- new("ASTNode", root=op, children=children)
+#
+#  # create the group by AST
+#  op <- new("ASTApply", op="GB")
+#  vars <- .args.to.ast(vars)
+#  GB <- new("ASTNode", root=op, children=list(.args.to.ast(data),vars,AGG))
+#
+#  mutable <- new("H2OFrameMutableState", ast = GB, nrows = NA_integer_, ncols = NA_integer_, col_names = NA_character_)
+#  finalizers <- data@finalizers
+#  conn <- h2o.getConnection()
+#  .newH2OObject("H2OFrame", conn = conn, key = .key.make(conn, "group_by"),
+#                finalizers = finalizers, linkToGC = TRUE, mutable = mutable)
+#}
 
 #-----------------------------------------------------------------------------------------------------------------------
 # *ply methods: ddply, apply, lapply, sapply,
@@ -1558,19 +1777,6 @@ h2o.ddply <- function (.data, .variables, .fun = NULL, ..., .progress = 'none') 
   if(vars < 0L || vars > (ncol(.data)-1L))
     stop('Column ', vars, ' out of range for frame columns ', ncol(.data), '.')
 
-  # FUN <- deparse(substitute(.fun), width.cutoff = 500L)
-  # if(is.character(.fun)) FUN <- gsub("\"", "", FUN)
-  # .FUN <- get(FUN)
-  # if( !is.function(.FUN) ) stop("FUN must be an R function
-  if( typeof(.fun) == 'closure' ) FUN <- deparse(substitute(.fun), width.cutoff = 500L)
-  else FUN <- .fun
-  .FUN <- NULL
-  if (is.character(FUN)) .FUN <- get(FUN, envir = envir)
-  if (!is.null(.FUN) && !is.function(.FUN)) stop("FUN must be an R function")
-  else if(is.null(.FUN) && !is.function(FUN))
-    stop("FUN must be an R function")
-  if (!is.null(.FUN)) FUN <- as.name(FUN)
-
   l <- list(...)
   if(length(l) > 0L) {
     tmp <- sapply(l, function(x) { !class(x) %in% c("H2OFrame", "numeric", "character", "logical") } )
@@ -1588,12 +1794,14 @@ h2o.ddply <- function (.data, .variables, .fun = NULL, ..., .progress = 'none') 
   }
 
   # Process the function. Decide if it's an anonymous fcn, or a named one.
+  FUN <- .fun
+  if(is.character(.fun)) FUN <- gsub("\"", "", FUN)
   myfun <- deparse(substitute(FUN), width.cutoff = 500L)
   fun.ast <- NULL
   # anon function?
   if (substr(myfun[1L], 1L, nchar("function")) == "function") {
     # handle anon fcn
-    fun.ast <- .fun.to.ast(FUN, "anon")
+    fun.ast <- .fun.to.ast(.fun, "anon")
     a <- invisible(.h2o.post.function(fun.ast))
     if (!is.null(a$exception)) stop(a$exception, call.=FALSE)
   # else named function get the ast
@@ -1601,26 +1809,24 @@ h2o.ddply <- function (.data, .variables, .fun = NULL, ..., .progress = 'none') 
     if (.is.op(substitute(FUN))) {
       fun.ast <- new("ASTFun", name=myfun, arguments="", body=new("ASTBody", statements=list()))
     } else {
-      fun_name <- as.character(FUN)
-      fun <- match.fun(FUN)
-      fun.ast <- .fun.to.ast(fun, fun_name)
-      a <- invisible(.h2o.post.function(fun.ast))
-      if (!is.null(a$exception)) stop(a$exception, call.=FALSE)
+      if( is(FUN, "standardGeneric")) {
+        fun_name <- FUN@generic[[1]]
+        fun.ast  <- new("ASTFun", name=fun_name, arguments="", body=new("ASTBody", statements=list()))
+      } else if( is.primitive(FUN) ) {
+        fun_name <- gsub("\\\"\\)","",gsub(".Primitive\\(\\\"","",deparse(FUN)))
+        fun.ast  <- new("ASTFun", name=fun_name, arguments="", body=new("ASTBody", statements=list()))
+      } else {
+        fun_name <- as.character(substitute(FUN))
+        fun <- match.fun(FUN)
+        fun.ast <- .fun.to.ast(fun, fun_name)
+        a <- invisible(.h2o.post.function(fun.ast))
+        if (!is.null(a$exception)) stop(a$exception, call.=FALSE)
+      }
     }
   }
 
   if (is.null(fun.ast)) stop("argument FUN was invalid")
-
-#  if(length(l) == 0)
-#    ast <- .h2o.nary_op("apply", X, MARGIN, fun.ast)
-#  else
-#    ast <- .h2o.nary_op("apply", X, MARGIN, fun.ast, fun_args = l)  # see the developer note in ast.R for info on the special "fun_args" parameter
-#  ast
-
-#  vars <- paste0('{', paste(vars, collapse = ";"), '}')
-
   .h2o.nary_frame_op("h2o.ddply", .data, vars, fun.ast)
-#  .h2o.nary_op("ddply", .data, vars, .fun, fun_args=list(...), .progress)
 }
 
 

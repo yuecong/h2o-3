@@ -24,7 +24,7 @@ assign("LOG_FILE_NAME", NULL,  .pkg.env)
              '<=' = 'L',
              '==' = 'n',
              '!=' = 'N',
-             '%%' = '%',
+             '%%' = 'mod',
              '**' = '^',
              '!'  = '_',
              '|'  = '|',
@@ -36,7 +36,7 @@ assign("LOG_FILE_NAME", NULL,  .pkg.env)
              '/'  = '/',
              '^'  = '^',
              't'  = 't', 
-             "%/%"="%/%")
+             "%/%"="intDiv")
 
 .binary_op.map <- c("%*%" = "x",
                     '>'  = 'g',
@@ -197,6 +197,8 @@ assign("LOG_FILE_NAME", NULL,  .pkg.env)
 
 #' Frame Manipulation
 .h2o.__CREATE_FRAME   <- "CreateFrame.json"
+
+.h2o.__GLMMakeModel <- "MakeGLMModel.json"
 
 #' Rapids Endpoint
 .h2o.__RAPIDS         <- "Rapids.json"

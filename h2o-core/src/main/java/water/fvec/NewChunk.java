@@ -202,7 +202,7 @@ public class NewChunk extends Chunk {
         assert _xs==null;
         for( int i = 0; i < sparseLen(); ++i) if( Double.isNaN(_ds[i]) ) nas++; else if( _ds[i]!=0 ) nzs++;
       } else {
-        if( _ls != null ) // Longs and enums?
+        if( _ls != null && _ls.length > 0) // Longs and enums?
           for( int i=0; i< sparseLen(); i++ )
             if( isNA2(i) ) nas++;
             else {
@@ -384,7 +384,7 @@ public class NewChunk extends Chunk {
       cancel_sparse();
       nc.cancel_sparse();
     }
-    if( _ds != null ) throw H2O.unimpl();
+    if( _ds != null ) throw H2O.fail();
     while( sparseLen() + nc.sparseLen() >= _xs.length )
       _xs = MemoryManager.arrayCopyOf(_xs,_xs.length<<1);
     _ls = MemoryManager.arrayCopyOf(_ls,_xs.length);
@@ -953,7 +953,7 @@ public class NewChunk extends Chunk {
           UnsafeUtils.set8(buf, off+ridsz, lval);
           break;
         default:
-          throw H2O.unimpl();
+          throw H2O.fail();
       }
     }
     assert off==buf.length;
@@ -983,7 +983,7 @@ public class NewChunk extends Chunk {
           UnsafeUtils.set8d(buf, off + ridsz, dval);
           break;
         default:
-          throw H2O.unimpl();
+          throw H2O.fail();
       }
     }
     assert off==buf.length;
@@ -1124,6 +1124,11 @@ public class NewChunk extends Chunk {
   @Override boolean set_impl(int i, float f) {  return set_impl(i,(double)f); }
 
   @Override boolean set_impl(int i, String str) {
+    if(_is == null && _len > 0) {
+      assert sparseLen() == 0;
+      alloc_str_indices(_len);
+      Arrays.fill(_is,-1);
+    }
     if(sparseLen() != _len){ // sparse?
       int idx = Arrays.binarySearch(_id,0, sparseLen(),i);
       if(idx >= 0)i = idx;

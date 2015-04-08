@@ -97,6 +97,18 @@ public class Env extends Iced {
     _trash = e._trash;
   }
 
+  // makes a new "global" context -- useful for one off invocations
+  static Env make(HashSet<Key> locked) {
+    Env env = new Env(locked);
+    // some default items in the symbol table
+    env.put("TRUE",  Env.NUM, "1"); env.put("T", Env.NUM, "1");
+    env.put("FALSE", Env.NUM, "0"); env.put("F", Env.NUM, "0");
+    env.put("NA",  Env.NUM, Double.toString(Double.NaN));
+    env.put("Inf", Env.NUM, Double.toString(Double.POSITIVE_INFINITY));
+    env.put("-Inf",Env.NUM, Double.toString(Double.NEGATIVE_INFINITY));
+    return env;
+  }
+
   public boolean isGlobal() { return _isGlobal && _parent == null && _local == null; }
 
   public static String typeToString(int type) {
@@ -822,15 +834,16 @@ class ValSeries extends Val {
 
   ValSeries(long[] idxs, ASTSpan[] spans) {
     _idxs = idxs;
+    if( _idxs!=null ) Arrays.sort(_idxs);
     _spans = spans;
   }
 
-  boolean contains(long a) {
+  boolean contains(final long a) {
     if (_spans != null)
-      for (ASTSpan s : _spans) if (s.contains(a)) return true;
-    if (_idxs != null)
-      for (long l : _idxs) if (l == a) return true;
-    return false;
+      for (ASTSpan s : _spans)
+        if (s.contains(a))
+          return true;
+    return _idxs != null && Arrays.binarySearch(_idxs, a) >= 0;
   }
 
   boolean isColSelector() { return _isCol; }
@@ -841,17 +854,9 @@ class ValSeries extends Val {
     _isCol = col;
   }
 
-  @Override String value() {
-    return null;
-  }
-
-  @Override
-  int type() {
-    return Env.SERIES;
-  }
-
-  @Override
-  public String toString() {
+  @Override String value() { return null; }
+  @Override int type() { return Env.SERIES; }
+  @Override public String toString() {
     String res = "c(";
     if (_spans != null) {
       for (ASTSpan s : _spans) {
@@ -861,9 +866,12 @@ class ValSeries extends Val {
       if (_idxs == null) res = res.substring(0, res.length() - 1); // remove last comma?
     }
     if (_idxs != null) {
-      for (long l : _idxs) {
-        res += l;
-        res += ",";
+      if( _idxs.length > 20) res += "too many ";
+      else {
+        for (long l : _idxs) {
+          res += l;
+          res += ",";
+        }
       }
       res = res.substring(0, res.length() - 1); // remove last comma.
     }
