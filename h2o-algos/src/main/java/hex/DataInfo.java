@@ -542,7 +542,7 @@ public class DataInfo extends Keyed {
       row.numVals[i] = d;
     }
 
-    if (_row_weights > 1) throw H2O.unimpl();
+    if (_row_weights > 1) throw H2O.unimpl("Only support one column for row weights for now.");
     for (int i=0; i<_row_weights; ++i)
       row.row_weight = chunks[_cats + _nums + i].atd(rid);
 
