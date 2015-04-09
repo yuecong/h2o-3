@@ -92,7 +92,7 @@ public class DeepLearningV2 extends SupervisedModelBuilderSchema<DeepLearning,De
      * If enabled, store the best model under the destination key of this model at the end of training.
      * Only applicable if training is not cancelled.
      */
-    @API(help = "If enabled, override the final model with the best model found during training", level = API.Level.expert, direction=API.Direction.INOUT)
+    @API(help = "If enabled, override the final model with the best model (on training or validation dataset, if provided) found during training", level = API.Level.expert, direction=API.Direction.INOUT)
     public boolean override_with_best_model;
 
     @API(help = "Auto-Encoder", level = API.Level.secondary, direction=API.Direction.INOUT)

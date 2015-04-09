@@ -44,7 +44,8 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
     public Key _checkpoint;
 
     /**
-     * If enabled, store the best model under the destination key of this model at the end of training.
+     * If enabled, store the best model (in terms of training error (or validation error, if validation set was provided)
+     * under the destination key of this model at the end of training.
      * Only applicable if training is not cancelled.
      */
     public boolean _override_with_best_model = true;
