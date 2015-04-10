@@ -18,8 +18,8 @@ import water.fvec.Vec;
 public class AUC2 extends Iced {
   public final int _nBins; // Max number of bins; can be less if there are fewer points
   public final double[] _ths;   // Thresholds
-  public final long[] _tps;     // True  Positives
-  public final long[] _fps;     // False Positives
+  public final double[] _tps;   // True  Positives
+  public final double[] _fps;   // False Positives
   public final long _p, _n;     // Actual trues, falses
   public final double _auc, _gini; // Actual AUC value
   public final int _max_idx;    // Threshold that maximizes the default criterion
@@ -107,10 +107,10 @@ public class AUC2 extends Iced {
   } // public enum ThresholdCriterion
 
   public double threshold( int idx ) { return _ths[idx]; }
-  public long tp( int idx ) { return _tps[idx]; }
-  public long fp( int idx ) { return _fps[idx]; }
-  public long tn( int idx ) { return _n-_fps[idx]; }
-  public long fn( int idx ) { return _p-_tps[idx]; }
+  public long tp( int idx ) { return (long)_tps[idx]; }
+  public long fp( int idx ) { return (long)_fps[idx]; }
+  public long tn( int idx ) { return (long)(_n-_fps[idx]); }
+  public long fn( int idx ) { return (long)(_p-_tps[idx]); }
 
   /** @return maximum F1 */
   public double maxF1() { return ThresholdCriterion.f1.max_criterion(this); }
@@ -132,8 +132,8 @@ public class AUC2 extends Iced {
     // Reverse everybody; thresholds from 1 down to 0, easier to read
     for( int i=0; i<((_nBins)>>1); i++ ) {
       double tmp= _ths[i];  _ths[i] = _ths[_nBins-1-i]; _ths[_nBins-1-i] = tmp ;
-      long tmpt = _tps[i];  _tps[i] = _tps[_nBins-1-i]; _tps[_nBins-1-i] = tmpt;
-      long tmpf = _fps[i];  _fps[i] = _fps[_nBins-1-i]; _fps[_nBins-1-i] = tmpf;
+      double tmpt = _tps[i];  _tps[i] = _tps[_nBins-1-i]; _tps[_nBins-1-i] = tmpt;
+      double tmpf = _fps[i];  _fps[i] = _fps[_nBins-1-i]; _fps[_nBins-1-i] = tmpf;
     }
 
     // Rollup counts, so that computing the rates are easier.
@@ -154,7 +154,7 @@ public class AUC2 extends Iced {
   private double compute_auc() {
     // All math is computed scaled by TP and FP.  We'll descale once at the
     // end.  Trapezoids from (tps[i-1],fps[i-1]) to (tps[i],fps[i])
-    long tp0 = 0, fp0 = 0;
+    double tp0 = 0, fp0 = 0;
     double area = 0;
     for( int i=0; i<_nBins; i++ ) {
       area += tp0*(_fps[i]-fp0); // Trapezoid: Square + 
@@ -189,10 +189,11 @@ public class AUC2 extends Iced {
     AUCBuilder _bldr;
     AUC_Impl( int nBins ) { _nBins = nBins; }
     @Override public void map( Chunk ps, Chunk as ) {
+      float row_weight = 1.0f; //FIXME
       AUCBuilder bldr = _bldr = new AUCBuilder(_nBins);
       for( int row = 0; row < ps._len; row++ )
         if( !ps.isNA(row) && !as.isNA(row) )
-          bldr.perRow(ps.atd(row),(int)as.at8(row));
+          bldr.perRow(ps.atd(row),(int)as.at8(row), row_weight);
     }
     @Override public void reduce( AUC_Impl auc ) { _bldr.reduce(auc._bldr); }
   }
@@ -202,24 +203,24 @@ public class AUC2 extends Iced {
     int _n;                     // Current number of bins
     double _ths[];              // Histogram bins, center
     double _sqe[];              // Histogram bins, squared error
-    long   _tps[];              // Histogram bins, true  positives
-    long   _fps[];              // Histogram bins, false positives
+    double _tps[];              // Histogram bins, true  positives
+    double _fps[];              // Histogram bins, false positives
     public AUCBuilder(int nBins) {
       _nBins = nBins;
       _ths = new double[nBins<<1]; // Threshold; also the mean for this bin
       _sqe = new double[nBins<<1]; // Squared error (variance) in this bin
-      _tps = new long  [nBins<<1]; // True  positives
-      _fps = new long  [nBins<<1]; // False positives
+      _tps = new double[nBins<<1]; // True  positives
+      _fps = new double[nBins<<1]; // False positives
     }    
 
-    public void perRow(double pred, int act ) {
+    public void perRow(double pred, int act, float row_weight ) {
       // Insert the prediction into the set of histograms in sorted order, as
       // if its a new histogram bin with 1 count.
       assert !Double.isNaN(pred);
       assert act==0 || act==1; // Actual better be 0 or 1
       int idx = Arrays.binarySearch(_ths,0,_n,pred);
       if( idx >= 0 ) {        // Found already in histogram; merge results
-        if( act==0 ) _fps[idx]++; else _tps[idx]++; // One more count; no change in squared error
+        if( act==0 ) _fps[idx]+=row_weight; else _tps[idx]+=row_weight; // Add more count; no change in squared error
         return;
       }
       // Slide over to do the insert.  Horrible slowness.
@@ -231,8 +232,8 @@ public class AUC2 extends Iced {
       // Insert into the histogram
       _ths[idx] = pred;         // New histogram center
       _sqe[idx] = 0;            // Only 1 point, so no squared error
-      if( act==0 ) { _tps[idx]=0; _fps[idx]=1; }
-      else         { _tps[idx]=1; _fps[idx]=0; }
+      if( act==0 ) { _tps[idx]=0; _fps[idx]=row_weight; }
+      else         { _tps[idx]=row_weight; _fps[idx]=0; }
       _n++;
       if( _n > _nBins )         // Merge as needed back down to nBins
         mergeOneBin();
@@ -283,8 +284,8 @@ public class AUC2 extends Iced {
       double minSQE = Double.MAX_VALUE;
       int minI = -1;
       for( int i=0; i<_n-1; i++ ) {
-        long k0 = _tps[i  ]+_fps[i  ];
-        long k1 = _tps[i+1]+_fps[i+1];
+        double k0 = _tps[i  ]+_fps[i  ];
+        double k1 = _tps[i+1]+_fps[i+1];
         double delta = _ths[i+1]-_ths[i];
         double sqe0 = _sqe[i]+_sqe[i+1]+delta*delta*k0*k1 / (k0+k1);
         if( sqe0 < minSQE || delta==0 ) {  
@@ -310,8 +311,8 @@ public class AUC2 extends Iced {
 
       // Merge two bins.  Classic bins merging by averaging the histogram
       // centers based on counts.
-      long k0 = _tps[minI  ]+_fps[minI  ];
-      long k1 = _tps[minI+1]+_fps[minI+1];
+      double k0 = _tps[minI  ]+_fps[minI  ];
+      double k1 = _tps[minI+1]+_fps[minI+1];
       double d = (_ths[minI]*k0+_ths[minI+1]*k1)/(k0+k1);
       // Setup the new merged bin at index minI
       _ths[minI] = d;

@@ -38,7 +38,8 @@ public class GLMValidation extends Iced {
     null_deviance += _glm.deviance(yreal, eta, _ymu);
     residual_deviance  += _glm.deviance(yreal, eta, ymodel);
     ++nobs;
-    if( _auc_bldr != null ) _auc_bldr.perRow(ymodel, (int) yreal);
+    float row_weight = 1.0f; // FIXME
+    if( _auc_bldr != null ) _auc_bldr.perRow(ymodel, (int) yreal, row_weight);
 
     if( _glm._family == Family.poisson ) { // aic for poisson
       long y = Math.round(yreal);

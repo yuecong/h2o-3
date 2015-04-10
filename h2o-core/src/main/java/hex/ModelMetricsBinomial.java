@@ -36,22 +36,23 @@ public class ModelMetricsBinomial extends ModelMetricsSupervised {
 
     // Passed a float[] sized nclasses+1; ds[0] must be a prediction.  ds[1...nclasses-1] must be a class
     // distribution;
-    @Override public double[] perRow(double ds[], float[] yact, Model m) {
+    @Override public double[] perRow(double ds[], float[] yact, float row_weight, Model m) {
       if( Float .isNaN(yact[0]) ) return ds; // No errors if   actual   is missing
       if( Double.isNaN(ds  [0]) ) return ds; // No errors if prediction is missing
-      _count++;
+      _count+=row_weight;
       final int iact = (int)yact[0];
 
       // Compute error
       double err = 1-ds[iact+1];  // Error: distance from predicting ycls as 1.0
-      _sumsqe += err*err;           // Squared error
+      _sumsqe += row_weight * err*err;           // Squared error
       assert !Double.isNaN(_sumsqe);
 
       // Compute log loss
       final double eps = 1e-15;
-      _logloss += -Math.log(Math.max(eps,ds[iact+1]));
+      _logloss += -row_weight*Math.log(Math.max(eps,ds[iact+1]));
 
-      _auc.perRow(ds[2],iact);
+      for (int i=0; i<row_weight; ++i) //FIXME - pass row_weight to AUC2.perRow()
+        _auc.perRow(ds[2],iact, 1.0f);
 
       return ds;                // Flow coding
     }

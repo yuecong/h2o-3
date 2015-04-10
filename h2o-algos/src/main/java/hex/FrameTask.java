@@ -115,6 +115,7 @@ public abstract class FrameTask<T extends FrameTask<T>> extends MRTask<T>{
     final int repeats = (int)Math.ceil(_useFraction);
     final float fraction = _useFraction / repeats;
 
+    Random row_weight_rng = RandomUtils.getRNG(0xDECAF);
     if (fraction < 1.0) {
       skip_rng = RandomUtils.getRNG(new Random().nextLong());
     }
@@ -125,7 +126,7 @@ public abstract class FrameTask<T extends FrameTask<T>> extends MRTask<T>{
         shuf_map[i] = start + i;
       ArrayUtils.shuffleArray(shuf_map, new Random().nextLong());
     }
-    long num_processed_rows = 0;
+    double num_processed_rows = 0;
     DataInfo.Row row = _dinfo.newDenseRow();
     for(int rrr = 0; rrr < repeats; ++rrr) {
       OUTER:
@@ -134,17 +135,24 @@ public abstract class FrameTask<T extends FrameTask<T>> extends MRTask<T>{
         final long lr = r + chunks[0].start();
         if ((_dinfo._nfolds > 0 && (lr % _dinfo._nfolds) == _dinfo._foldId)
           || (skip_rng != null && skip_rng.nextFloat() > fraction))continue;
-        ++num_processed_rows; //count rows with missing values even if they are skipped
-        if(!_dinfo.extractDenseRow(chunks, r, row).bad) {
+        row = _dinfo.extractDenseRow(chunks, r, row);
+        if(!row.bad) {
           long seed = offset + rrr * (end - start) + r;
-          if (outputs != null && outputs.length > 0)
-            processRow(seed, row, outputs);
-          else
-            processRow(seed, row);
+          row_weight_rng.setSeed(seed);
+          for (int i=0; i<row.row_weight; ++i) {
+            if (outputs != null && outputs.length > 0) processRow(seed++, row, outputs);
+            else processRow(seed++, row);
+          }
+          double remainder = row.row_weight-(int)row.row_weight;
+          if (remainder > 0 && row_weight_rng.nextDouble() < remainder) {
+            if (outputs != null && outputs.length > 0) processRow(seed++, row, outputs);
+            else processRow(seed++, row);
+          }
         }
+        num_processed_rows += row.row_weight; //count rows with missing values even if they are skipped
       }
     }
-    chunkDone(num_processed_rows);
+    chunkDone((long)num_processed_rows);
   }
 
 }

@@ -526,6 +526,7 @@ public class DeepLearningTest extends TestUtil {
       parms._seed = 0xdecaf;
       parms._l1 = 0.1;
       parms._epochs = 0.1;
+      parms._hidden = new int[]{1};
       parms._classification_stop = -1;
 
       // Build a first model; all remaining models should be equal
@@ -534,10 +535,13 @@ public class DeepLearningTest extends TestUtil {
 
       dl.score(parms.train());
       hex.ModelMetricsBinomial mm = hex.ModelMetricsBinomial.getFromDKV(dl, parms.train());
-      Assert.assertTrue(Math.abs(0.8518518518518519 - mm.auc()._auc) < 1e-8);
+//      assertEquals(0.8518518518518519, mm.auc()._auc, 1e-8);
+      assertEquals(0.7222222222222222, mm.auc()._auc, 1e-8);
 
       double mse = dl._output.train_metrics.mse();
-      assertEquals(0.21757859226445403, mse, 1e-6);
+//      assertEquals(0.21757859226445403, mse, 1e-6); //Note: better results than non-shuffled
+      assertEquals(0.31894419928669016, mse, 1e-6); //Note: better results than non-shuffled
+
       job.remove();
       dl.delete();
     } finally{
@@ -559,7 +563,9 @@ public class DeepLearningTest extends TestUtil {
       parms._response_column = "response";
       parms._reproducible = true;
       parms._seed = 0xdecaf;
-      parms._epochs = 2;
+      parms._l1 = 0.1;
+      parms._epochs = 0.1;
+      parms._hidden = new int[]{1};
       parms._classification_stop = -1;
 
       // Build a first model; all remaining models should be equal
@@ -568,10 +574,11 @@ public class DeepLearningTest extends TestUtil {
 
       dl.score(parms.train());
       hex.ModelMetricsBinomial mm = hex.ModelMetricsBinomial.getFromDKV(dl, parms.train());
-      Assert.assertTrue(Math.abs(1.0 - mm.auc()._auc) < 1e-8); //Note: better results than non-shuffled
+//      assertEquals(0.8518518518518519, mm.auc()._auc, 1e-8);
+      assertEquals(0.7222222222222222, mm.auc()._auc, 1e-8);
 
       double mse = dl._output.train_metrics.mse();
-      assertEquals(0.007518775420551756, mse, 1e-6); //Note: better results than non-shuffled
+      assertEquals(0.37203048338693356, mse, 1e-6); //Shuffling changes results!
       job.remove();
       dl.delete();
     } finally{
@@ -596,6 +603,7 @@ public class DeepLearningTest extends TestUtil {
       parms._seed = 0xdecaf;
       parms._classification_stop = -1;
       parms._l1 = 0.1;
+      parms._hidden = new int[]{1};
       parms._epochs = 0.1;
 
       // Build a first model; all remaining models should be equal
@@ -604,10 +612,12 @@ public class DeepLearningTest extends TestUtil {
 
       dl.score(parms.train());
       hex.ModelMetricsBinomial mm = hex.ModelMetricsBinomial.getFromDKV(dl, parms.train());
-      Assert.assertTrue(Math.abs(0.8518518518518519  - mm.auc()._auc) < 1e-8);
+//      assertEquals(0.8518518518518519, mm.auc()._auc, 1e-8);
+      assertEquals(0.7222222222222222, mm.auc()._auc, 1e-8);
 
       double mse = dl._output.train_metrics.mse();
-      assertEquals(0.21757859226445403, mse, 1e-6); //Note: better results than non-shuffled
+//      assertEquals(0.21757859226445403, mse, 1e-6); //Note: better results than non-shuffled
+      assertEquals(0.31894419928669016, mse, 1e-6); //Note: better results than non-shuffled
       job.remove();
       dl.delete();
     } finally{
@@ -617,7 +627,6 @@ public class DeepLearningTest extends TestUtil {
     Scope.exit();
   }
 
-  @Ignore
   @Test public void testRowWeights() {
     Frame tfr=null, vfr=null;
 
@@ -633,18 +642,21 @@ public class DeepLearningTest extends TestUtil {
       parms._seed = 0xdecaf;
       parms._classification_stop = -1;
       parms._l1 = 0.1;
+      parms._hidden = new int[]{1};
       parms._epochs = 0.1;
 
       // Build a first model; all remaining models should be equal
       DeepLearning job = new DeepLearning(parms);
       DeepLearningModel dl = job.trainModel().get();
 
-      dl.score(parms.train());
+      dl.score(parms.train(), parms.train().vec(parms._row_weights_column));
       hex.ModelMetricsBinomial mm = hex.ModelMetricsBinomial.getFromDKV(dl, parms.train());
-      Assert.assertTrue(Math.abs(0.8518518518518519  - mm.auc()._auc) < 1e-8);
+//      assertEquals(0.8518518518518519, mm.auc()._auc, 1e-8);
+      assertEquals(0.7222222222222222, mm.auc()._auc, 1e-8);
 
       double mse = dl._output.train_metrics.mse();
-      assertEquals(0.21757859226445403, mse, 1e-6);
+//      assertEquals(0.21757859226445403, mse, 1e-6); //Note: better results than non-shuffled
+      assertEquals(0.31894419928669016, mse, 1e-6); //Note: better results than non-shuffled
       job.remove();
       dl.delete();
     } finally{

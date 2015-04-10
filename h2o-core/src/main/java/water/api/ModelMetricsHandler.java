@@ -178,7 +178,7 @@ class ModelMetricsHandler extends Handler {
     if (null == DKV.get(s.frame.name)) throw new H2OKeyNotFoundArgumentException("frame", "predict", s.frame.name);
 
     ModelMetricsList parms = s.createAndFillImpl();
-    Frame fr = parms._model.score(parms._frame, parms._destination_key); // throw away predictions
+    Frame fr = parms._model.score(parms._frame, null, parms._destination_key); // throw away predictions
     DKV.remove(fr._key);
     ModelMetricsListSchemaV3 mm = this.fetch(version, s);
 
@@ -212,7 +212,7 @@ class ModelMetricsHandler extends Handler {
     if (!s.reconstruction_error && s.deep_features_hidden_layer < 0 ) {
       if (null == parms._destination_key)
         parms._destination_key = "predictions" + Key.make().toString().substring(0,5) + "_" + parms._model._key.toString() + "_on_" + parms._frame._key.toString();
-      predictions = parms._model.score(parms._frame, parms._destination_key);
+      predictions = parms._model.score(parms._frame, null, parms._destination_key);
     } else {
       if (Model.DeepFeatures.class.isAssignableFrom(parms._model.getClass())) {
         if (s.reconstruction_error) {

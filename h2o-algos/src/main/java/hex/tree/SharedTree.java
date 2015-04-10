@@ -370,7 +370,7 @@ public abstract class SharedTree<M extends SharedTreeModel<M,P,O>, P extends Sha
       SharedTreeModel.SharedTreeOutput out = _model._output;
       _timeLastScoreStart = now;
       // Score on training data
-      Score sc = new Score(this,oob,_model._output.getModelCategory()).doAll(train(), build_tree_one_node);
+      Score sc = new Score(this,oob,_model._output.getModelCategory(), _row_weights).doAll(train(), build_tree_one_node);
       ModelMetricsSupervised mm = sc.makeModelMetrics(_model, _parms.train(), _parms._response_column);
       String train_logloss = isClassifier() ? ", logloss is " + (float)(_nclass == 2 ? ((ModelMetricsBinomial)mm)._logloss : ((ModelMetricsMultinomial)mm)._logloss) : "";
       out._mse_train[out._ntrees] = mm._mse; // Store score results in the model output
@@ -378,7 +378,7 @@ public abstract class SharedTree<M extends SharedTreeModel<M,P,O>, P extends Sha
       Log.info("training r2 is "+(float)mm.r2()+", mse is "+(float)mm._mse+ train_logloss + ", with "+_model._output._ntrees+"x"+_nclass+" trees (average of "+(1 + _model._output._treeStats._mean_leaves)+" nodes)"); //add 1 for root, which is not a leaf
       // Score again on validation data
       if( _parms._valid != null ) {
-        Score scv = new Score(this,oob,_model._output.getModelCategory()).doAll(valid(), build_tree_one_node);
+        Score scv = new Score(this,oob,_model._output.getModelCategory(), _vrow_weights).doAll(valid(), build_tree_one_node);
         ModelMetricsSupervised mmv = scv.makeModelMetrics(_model,_parms.valid(), _parms._response_column);
         out._mse_valid[out._ntrees] = mmv._mse; // Store score results in the model output
         String valid_logloss = isClassifier() ? ", logloss is " + (float)(_nclass == 2 ? ((ModelMetricsBinomial)mmv)._logloss : ((ModelMetricsMultinomial)mmv)._logloss) : "";

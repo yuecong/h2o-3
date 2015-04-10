@@ -86,7 +86,7 @@ public class PCAModel extends Model<PCAModel,PCAModel.PCAParameters,PCAModel.PCA
       }
 
       @Override
-      public double[] perRow(double[] dataRow, float[] preds, Model m) { return dataRow; }
+      public double[] perRow(double[] dataRow, float[] preds, float row_weight, Model m) { return dataRow; }
 
       @Override
       public ModelMetrics makeModelMetrics(Model m, Frame f, double sigma) {
@@ -96,7 +96,7 @@ public class PCAModel extends Model<PCAModel,PCAModel.PCAParameters,PCAModel.PCA
   }
 
   @Override
-  protected Frame scoreImpl(Frame orig, Frame adaptedFr, String destination_key) {
+  protected Frame scoreImpl(Frame orig, Frame adaptedFr, Vec row_weights, String destination_key) {
     Frame adaptFrm = new Frame(adaptedFr);
     for(int i = 0; i < _parms._k; i++)
       adaptFrm.add("PC"+String.valueOf(i+1),adaptFrm.anyVec().makeZero());
@@ -135,10 +135,10 @@ public class PCAModel extends Model<PCAModel,PCAModel.PCAParameters,PCAModel.PCA
   }
 
   @Override
-  public Frame score(Frame fr, String destination_key) {
+  public Frame score(Frame fr, Vec row_weights, String destination_key) {
     Frame adaptFr = new Frame(fr);
     adaptTestForTrain(adaptFr, true);   // Adapt
-    Frame output = scoreImpl(fr, adaptFr, destination_key); // Score
+    Frame output = scoreImpl(fr, adaptFr, row_weights, destination_key); // Score
 
     Vec[] vecs = adaptFr.vecs();
     for (int i = 0; i < vecs.length; i++)

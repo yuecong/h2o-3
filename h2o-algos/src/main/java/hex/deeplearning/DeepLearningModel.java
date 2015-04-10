@@ -1707,7 +1707,7 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
           // compute errors
           final String m = model_info().toString();
           if (m.length() > 0) Log.info(m);
-          final Frame trainPredict = score(ftrain);
+          final Frame trainPredict = score(ftrain, ftrain.vecs()[ftrain.vecs().length-2]);
           trainPredict.delete();
 
           hex.ModelMetricsSupervised mm1 = (ModelMetricsSupervised)ModelMetrics.getFromDKV(this,ftrain);
@@ -1731,7 +1731,7 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
           _output.run_time = run_time;
 
           if (ftest != null) {
-            Frame validPred = score(ftest);
+            Frame validPred = score(ftest, ftest.vecs()[ftest.vecs().length-2]);
             validPred.delete();
             hex.ModelMetricsSupervised mm2 = (ModelMetricsSupervised)hex.ModelMetrics.getFromDKV(this, ftest);
             if (mm2 != null) {
@@ -1880,9 +1880,9 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
    * @param adaptedFr Test dataset, adapted to the model
    * @return A frame containing the prediction or reconstruction
    */
-  @Override protected Frame scoreImpl(Frame orig, Frame adaptedFr, String destination_key) {
+  @Override protected Frame scoreImpl(Frame orig, Frame adaptedFr, Vec weights, String destination_key) {
     if (!get_params()._autoencoder) {
-      return super.scoreImpl(orig,adaptedFr,destination_key);
+      return super.scoreImpl(orig,adaptedFr,weights,destination_key);
     } else {
       // Reconstruction
       final int len = model_info().data_info().fullN();
@@ -1984,13 +1984,13 @@ public class DeepLearningModel extends SupervisedModel<DeepLearningModel,DeepLea
     return res;
   }
 
-  @Override public Frame score(Frame fr, String destination_key) {
+  @Override public Frame score(Frame fr, Vec weights, String destination_key) {
     if (!_parms._autoencoder)
-      return super.score(fr, destination_key);
+      return super.score(fr, weights, destination_key);
     else {
       Frame adaptFr = new Frame(fr);
       adaptTestForTrain(adaptFr, true);   // Adapt
-      Frame output = scoreImpl(fr, adaptFr, destination_key); // Score
+      Frame output = scoreImpl(fr, adaptFr, weights, destination_key); // Score
 
       Vec[] vecs = adaptFr.vecs();
       for (int i = 0; i < vecs.length; i++)

@@ -244,6 +244,7 @@ public class DeepLearning extends SupervisedModelBuilder<DeepLearningModel,DeepL
         model.write_lock(self());
         final DeepLearningModel.DeepLearningParameters mp = model._parms;
 
+        // Convention: Deep Learning *always* has a weight column now -> DataInfo
         Frame tra_fr = addRowWeights(_train, rowWeights());
         Frame val_fr = _valid == null ? null : addRowWeights(_valid, vrowWeights());
 

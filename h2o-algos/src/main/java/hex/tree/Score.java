@@ -6,6 +6,7 @@ import hex.ModelMetricsSupervised;
 import water.MRTask;
 import water.fvec.Chunk;
 import water.fvec.Frame;
+import water.fvec.Vec;
 import water.util.ModelUtils;
 
 /** Score the tree columns, and produce a confusion matrix and AUC
@@ -15,12 +16,13 @@ public class Score extends MRTask<Score> {
   final boolean _oob;           // Computed on OOB
   final ModelCategory _mcat;    // Model category (Binomial, Regression, etc)
   ModelMetrics.MetricBuilder _mb;
+  final Vec _row_weights;
 
   /** Compute ModelMetrics on the testing dataset.
    *  It expect already adapted validation dataset which is adapted to a model
    *  and contains a response which is adapted to confusion matrix domain.
    */
-  public Score(SharedTree bldr, boolean oob, ModelCategory mcat) { _bldr = bldr; _oob = oob; _mcat = mcat; }
+  public Score(SharedTree bldr, boolean oob, ModelCategory mcat, Vec row_weights) { _bldr = bldr; _oob = oob; _mcat = mcat; _row_weights = row_weights; }
   
   @Override public void map( Chunk chks[] ) {
     Chunk ys = _bldr.chk_resp(chks);  // Response
@@ -50,7 +52,8 @@ public class Score extends MRTask<Score> {
         _bldr.score2(chks,cdists,row); // Use the training data directly (per-row predictions already made)
       if( nclass > 1 ) cdists[0] = ModelUtils.getPrediction(cdists); // Fill in prediction
       val[0] = (float)ys.atd(row);
-      _mb.perRow(cdists,val, _bldr._model);
+      float row_weight = _row_weights == null ? 1.0f : (float)_row_weights.chunkForChunkIdx(chks[0].cidx()).atd(row);
+      _mb.perRow(cdists,val, row_weight, _bldr._model);
     }
   }
 

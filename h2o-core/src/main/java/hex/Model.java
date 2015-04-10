@@ -409,7 +409,7 @@ public abstract class Model<M extends Model<M,P,O>, P extends Model.Parameters, 
 
   /**
    * Bulk score the frame, and auto-name the resulting predictions frame.
-   * @see #score(Frame, String)
+   * @see #score(Frame, Vec, String)
    * @param fr frame which should be scored
    * @return A new frame containing a predicted values. For classification it
    *         contains a column with prediction and distribution for all
@@ -418,7 +418,11 @@ public abstract class Model<M extends Model<M,P,O>, P extends Model.Parameters, 
    * @throws IllegalArgumentException
    */
   public Frame score(Frame fr) throws IllegalArgumentException {
-    return score(fr, null);
+    return score(fr, null, null);
+  }
+
+  public Frame score(Frame fr, Vec row_weights) throws IllegalArgumentException {
+    return score(fr, row_weights, null);
   }
 
   /** Bulk score the frame {@code fr}, producing a Frame result; the 1st
@@ -434,10 +438,10 @@ public abstract class Model<M extends Model<M,P,O>, P extends Model.Parameters, 
    *         predicted values.
    * @throws IllegalArgumentException
    */
-  public Frame score(Frame fr, String destination_key) throws IllegalArgumentException {
+  public Frame score(Frame fr, Vec row_weights, String destination_key) throws IllegalArgumentException {
     Frame adaptFr = new Frame(fr);
     adaptTestForTrain(adaptFr,true);   // Adapt
-    Frame output = scoreImpl(fr,adaptFr, destination_key); // Score
+    Frame output = scoreImpl(fr,adaptFr, row_weights, destination_key); // Score
 
     // Log modest confusion matrices
     Vec predicted = output.vecs()[0]; // Modeled/predicted response
@@ -479,7 +483,7 @@ public abstract class Model<M extends Model<M,P,O>, P extends Model.Parameters, 
    * @param adaptFrm Already adapted frame
    * @return A Frame containing the prediction column, and class distribution
    */
-  protected Frame scoreImpl(Frame fr, Frame adaptFrm, String destination_key) {
+  protected Frame scoreImpl(Frame fr, Frame adaptFrm, Vec row_weights, String destination_key) {
     assert Arrays.equals(_output._names,adaptFrm._names); // Already adapted
     // Build up the names & domains.
     final int nc = _output.nclasses();
@@ -491,7 +495,7 @@ public abstract class Model<M extends Model<M,P,O>, P extends Model.Parameters, 
       names[i] = _output.classNames()[i-1];
     domains[0] = nc==1 ? null : adaptFrm.lastVec().domain();
     // Score the dataset, building the class distribution & predictions
-    BigScore bs = new BigScore(domains[0],ncols).doAll(ncols,adaptFrm);
+    BigScore bs = new BigScore(domains[0],ncols, row_weights).doAll(ncols,adaptFrm);
     bs._mb.makeModelMetrics(this,fr, this instanceof SupervisedModel ? adaptFrm.lastVec().sigma() : Double.NaN);
     Frame res = bs.outputFrame((null == destination_key ? Key.make() : Key.make(destination_key)),names,domains);
     DKV.put(res);
@@ -502,7 +506,8 @@ public abstract class Model<M extends Model<M,P,O>, P extends Model.Parameters, 
     final String[] _domain; // Prediction domain; union of test and train classes
     final int _npredcols;  // Number of columns in prediction; nclasses+1 - can be less than the prediction domain
     ModelMetrics.MetricBuilder _mb;
-    BigScore( String[] domain, int ncols ) { _domain = domain; _npredcols = ncols; }
+    final Vec _row_weights;
+    BigScore( String[] domain, int ncols, Vec row_weights ) { _domain = domain; _npredcols = ncols; _row_weights = row_weights; }
     @Override public void map( Chunk chks[], NewChunk cpreds[] ) {
       double[] tmp = new double[_output.nfeatures()];
       _mb = Model.this.makeMetricBuilder(_domain);
@@ -515,7 +520,11 @@ public abstract class Model<M extends Model<M,P,O>, P extends Model.Parameters, 
         for (int c = startcol; c < chks.length; c++) {
           actual[c-startcol] = (float)chks[c].atd(row);
         }
-        _mb.perRow(preds, actual, Model.this);
+
+        float row_weight = _row_weights == null ? 1.0f : (float)_row_weights.chunkForChunkIdx(chks[0].cidx()).atd(row);
+        for (int i=0; i<row_weight; ++i) //FIXME: Pass through the row weight
+          _mb.perRow(preds, actual, 1.0f, Model.this);
+
         for (int c = 0; c < _npredcols; c++)  // Output predictions; sized for train only (excludes extra test classes)
           cpreds[c].addNum(p[c]);
       }

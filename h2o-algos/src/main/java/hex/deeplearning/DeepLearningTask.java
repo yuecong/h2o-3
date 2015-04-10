@@ -5,6 +5,7 @@ import hex.FrameTask;
 import water.H2O;
 import water.H2O.H2OCountedCompleter;
 import water.Key;
+import water.util.ArrayUtils;
 import water.util.Log;
 import water.util.RandomUtils;
 
@@ -38,7 +39,6 @@ public class DeepLearningTask extends FrameTask<DeepLearningTask> {
     _output = _input; //faster, good enough in this case (since the input was freshly deserialized by the Weaver)
     _input = null;
     _output.set_processed_local(0l);
-    _row_weight_rng = RandomUtils.getRNG(0xDECAF ^ _output.get_params()._seed);
   }
 
   // create local workspace (neurons)
@@ -48,26 +48,16 @@ public class DeepLearningTask extends FrameTask<DeepLearningTask> {
   }
 
   @Override public final void processRow(long seed, DataInfo.Row r){
-    assert !r.isSparse():"Deep learning does not support sparse rows.";
+    assert !r.isSparse():"Deep Learning does not support sparse rows.";
     if (model_info().get_params()._reproducible) {
       seed += model_info().get_processed_global(); //avoid periodicity
+      seed = 1111; //FIXME
     } else {
       seed = new Random().nextLong();
     }
     ((Neurons.Input)_neurons[0]).setInput(seed, r.numVals, r.nBins, r.binIds);
-//    Log.info("row weight: " + r.row_weight);
-
-    // Handle integer portion of row_weight -> repeat fprop + bprop (as if the point were repeated in order)
-    for (int i=0; i<r.row_weight; ++i) {
       step(seed, _neurons, _output, _training, r.response);
-    }
 
-    // Handle fractional row weights probabilistically
-    // TODO: Alert the user if mean(row_weight) is < 1
-    double remainder = r.row_weight-(int)r.row_weight;
-    if (remainder > 0 && _row_weight_rng.nextDouble() < remainder) {
-      step(seed, _neurons, _output, _training, r.response);
-    }
   }
 
   @Override protected void chunkDone(long n) {
@@ -173,6 +163,7 @@ public class DeepLearningTask extends FrameTask<DeepLearningTask> {
   // assumption: layer 0 has _a filled with (horizontalized categoricals) double values
   public static void step(long seed, Neurons[] neurons, DeepLearningModel.DeepLearningModelInfo minfo, boolean training, double[] responses) {
     try {
+//      Log.info(minfo.toStringAll());
       for (int i=1; i<neurons.length-1; ++i) {
         neurons[i].fprop(seed, training);
       }

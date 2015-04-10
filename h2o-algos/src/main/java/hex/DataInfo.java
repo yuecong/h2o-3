@@ -446,7 +446,7 @@ public class DataInfo extends Keyed {
     public double [] response;
     public int    [] numIds;
     public int    [] binIds;
-    public double row_weight;
+    public float row_weight;
     public int       rid;
     public int       nBins;
     public int       nNums;
@@ -544,7 +544,7 @@ public class DataInfo extends Keyed {
 
     if (_row_weights > 1) throw H2O.unimpl("Only support one column for row weights for now.");
     for (int i=0; i<_row_weights; ++i)
-      row.row_weight = chunks[_cats + _nums + i].atd(rid);
+      row.row_weight = (float)chunks[_cats + _nums + i].atd(rid);
 
     for (int i = 0; i < _responses; ++i) {
       row.response[i] = chunks[_cats + _nums + _row_weights + i].atd(rid);

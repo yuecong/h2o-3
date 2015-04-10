@@ -247,9 +247,12 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
 
     // place row weights at the end (and if not specified, make one consisting of all 1.0s)
     if (expensive && canHaveRowWeights()) {
-      _row_weights_name = _parms._row_weights_column == null ?
-              "default_row_weights_all_ones" : _parms._row_weights_column;
-      while (_train.vec(_row_weights_name) != null) _row_weights_name = "_" + _row_weights_name;
+      if (_parms._row_weights_column == null) {
+        _row_weights_name = "default_row_weights_all_ones";
+        while (_train.vec(_row_weights_name) != null) _row_weights_name = "_" + _row_weights_name;
+      } else {
+        _row_weights_name = _parms._row_weights_column;
+      }
 
       int weight_idx = _train.find(_row_weights_name);
       if (weight_idx == -1) {
