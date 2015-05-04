@@ -9,7 +9,7 @@ source('../h2o-runit.R')
 
 test <- function(conn) {
   print("Reading in data (tiny airline with UUIDs).")
-    airline.hex <- h2o.uploadFile(conn, locate("smalldata/airlines/uuid_airline.csv"), key="airline.hex", header=TRUE)
+    airline.hex <- h2o.uploadFile(conn, locate("smalldata/airlines/uuid_airline.csv"), destination_frame="airline.hex", header=TRUE)
     print("Summary of airline data: ")
     print(summary(airline.hex))
     print("Head of airline data: ")
@@ -68,7 +68,7 @@ test <- function(conn) {
   print("Check performce and AUC")
     perf <- h2o.performance(airline.glm,airline.test.hex)
     print(perf)
-    perf@metrics$auc
+    perf@metrics$AUC
 
   print("Show distribution of predictions with quantile.")
     print(quant <- quantile.H2OFrame(air.results$'1'))

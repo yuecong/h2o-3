@@ -1,7 +1,6 @@
 package hex.tree;
 
 import hex.*;
-import static hex.tree.SharedTree.printGenerateTrees;
 import water.*;
 import water.util.*;
 
@@ -21,8 +20,6 @@ public abstract class SharedTreeModel<M extends SharedTreeModel<M,P,O>, P extend
 
     public int _nbins = 20; // Build a histogram of this many bins, then split at the best point
 
-    public boolean _score_each_iteration;
-
     public long _seed;          // Seed for pseudo-random redistribution
 
     // TRUE: Continue extending an existing checkpointed model
@@ -40,9 +37,18 @@ public abstract class SharedTreeModel<M extends SharedTreeModel<M,P,O>, P extend
   }
 
   public abstract static class SharedTreeOutput extends SupervisedModel.SupervisedOutput {
-
-    /** Initially predicted value (for zero trees) */
-    public double _initialPrediction;
+    /** InitF value (for zero trees)
+     *  f0 = mean(yi) for gaussian
+     *  f0 = log(yi/1-yi) for bernoulli
+     *
+     *  For GBM bernoulli, the initial prediction for 0 trees is
+     *  p = 1/(1+exp(-f0))
+     *
+     *  From this, the mse for 0 trees can be computed as follows:
+     *  mean((yi-p)^2)
+     *  This is what is stored in _mse_train[0]
+     * */
+    public double _init_f;
 
     /** Number of trees actually in the model (as opposed to requested) */
     public int _ntrees;
@@ -59,7 +65,12 @@ public abstract class SharedTreeModel<M extends SharedTreeModel<M,P,O>, P extend
     public double _mse_train[/*_ntrees+1*/];
     public double _mse_valid[/*_ntrees+1*/];
 
-    /** Variable Importance */
+    /** Training time */
+    public long _training_time_ms[/*ntrees+1*/] = new long[]{System.currentTimeMillis()};
+
+    /**
+     * Variable importances computed during training
+     */
     public TwoDimTable _variable_importances;
 
     public SharedTreeOutput( SharedTree b, double mse_train, double mse_valid ) {
@@ -68,13 +79,14 @@ public abstract class SharedTreeModel<M extends SharedTreeModel<M,P,O>, P extend
       _treeKeys = new Key[_ntrees][]; // No tree keys yet
       _treeStats = new TreeStats();
       _mse_train = new double[]{mse_train};
-      _mse_valid  = new double[]{mse_valid};
+      _mse_valid = new double[]{mse_valid};
     }
 
     // Append next set of K trees
     public void addKTrees( DTree[] trees) {
+      // DEBUG: Print the generated K trees
+      //SharedTree.printGenerateTrees(trees);
       assert nclasses()==trees.length;
-      _treeStats.updateBy(trees); // Update tree shape stats
       // Compress trees and record tree-keys
       _treeKeys = Arrays.copyOf(_treeKeys ,_ntrees+1);
       Key[] keys = _treeKeys[_ntrees] = new Key[trees.length];
@@ -82,12 +94,13 @@ public abstract class SharedTreeModel<M extends SharedTreeModel<M,P,O>, P extend
       for( int i=0; i<nclasses(); i++ ) if( trees[i] != null ) {
         CompressedTree ct = trees[i].compress(_ntrees,i);
         DKV.put(keys[i]=ct._key,ct,fs);
+        _treeStats.updateBy(trees[i]); // Update tree shape stats
       }
       _ntrees++;
       // 1-based for errors; _mse_train[0] is for zero trees, not 1 tree
       _mse_train = ArrayUtils.copyAndFillOf(_mse_train, _ntrees+1, Double.NaN);
-      if( _mse_valid != null )
-        _mse_valid = ArrayUtils.copyAndFillOf(_mse_valid, _ntrees+1, Double.NaN);
+      _mse_valid = _validation_metrics != null ? ArrayUtils.copyAndFillOf(_mse_valid, _ntrees+1, Double.NaN) : null;
+      _training_time_ms = ArrayUtils.copyAndFillOf(_training_time_ms, _ntrees+1, System.currentTimeMillis());
       fs.blockForPending();
     }
 
@@ -116,10 +129,6 @@ public abstract class SharedTreeModel<M extends SharedTreeModel<M,P,O>, P extend
       }
   }
 
-  // Numeric type used in generated code to hold predicted value between the
-  // calls; i.e. the numerical precision of predictions.
-  static final String PRED_TYPE = "double";
-
   @Override protected Futures remove_impl( Futures fs ) {
     for( Key ks[] : _output._treeKeys)
       for( Key k : ks )
@@ -128,6 +137,11 @@ public abstract class SharedTreeModel<M extends SharedTreeModel<M,P,O>, P extend
   }
 
   // Override in subclasses to provide some top-level model-specific goodness
+  @Override protected boolean toJavaCheckTooBig() {
+    // If the number of leaves in a forest is more than N, don't try to render it in the browser as POJO code.
+    return _output==null || _output._treeStats._num_trees * _output._treeStats._mean_leaves > 5000;
+  }
+  protected boolean binomialOpt() { return false; }
   @Override protected SB toJavaInit(SB sb, SB fileContext) {
     sb.nl();
     sb.ip("public boolean isSupervised() { return true; }").nl();
@@ -136,7 +150,6 @@ public abstract class SharedTreeModel<M extends SharedTreeModel<M,P,O>, P extend
     sb.ip("public ModelCategory getModelCategory() { return ModelCategory."+_output.getModelCategory()+"; }").nl();
     return sb;
   }
-  protected boolean binomialOpt() { return false; }
   @Override protected void toJavaPredictBody(SB body, SB classCtx, SB file) {
     final int nclass = _output.nclasses();
     body.ip("java.util.Arrays.fill(preds,0);").nl();

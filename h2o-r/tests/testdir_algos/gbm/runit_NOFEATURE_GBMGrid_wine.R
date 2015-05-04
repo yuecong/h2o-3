@@ -3,11 +3,11 @@ source('../../h2o-runit.R')
 
 gbm.grid.test<-
 function(conn) {
-    wine.hex <- h2o.uploadFile(conn, locate("smalldata/gbm_test/wine.data"), key="wine.hex")
+    wine.hex <- h2o.uploadFile(conn, locate("smalldata/gbm_test/wine.data"), destination_frame="wine.hex")
     print(summary(wine.hex))
     x <- 3:14
     wine.grid <- h2o.gbm(y = 2, x = c(1,3:14),
-                   loss='gaussian',
+                   distribution='gaussian',
                    training_frame = wine.hex, ntrees=c(5,10,15),
                    max_depth=c(2,3,4),
                    learn_rate=c(0.1,0.2))

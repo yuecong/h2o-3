@@ -434,6 +434,12 @@ public class Schema<I extends Iced, S extends Schema<I,S>> extends Iced {
             for (int i = 0; i < from.length; i++)
               copy[i] = from[i];
             f.set(this, copy);
+          } else if (parse_result.getClass().getComponentType() == Float.class && f.getType().getComponentType() == float.class) {
+            Float[] from = (Float[])parse_result;
+            float[] copy = new float[from.length];
+            for (int i = 0; i < from.length; i++)
+              copy[i] = from[i];
+            f.set(this, copy);
           } else {
             throw H2O.fail("Don't know how to cast an array of: " + parse_result.getClass().getComponentType() + " to an array of: " + f.getType().getComponentType());
           }
@@ -460,7 +466,7 @@ public class Schema<I extends Iced, S extends Schema<I,S>> extends Iced {
         API api = (API) f.getAnnotations()[0]; // TODO: is there a more specific way we can do this?
         if (api.required()) {
           if (parms.getProperty(f.getName()) == null) {
-            IcedHashMap<String, Object> values = new IcedHashMap<>();
+            IcedHashMap.IcedHashMapStringObject values = new IcedHashMap.IcedHashMapStringObject();
             values.put("schema", this.getClass().getSimpleName());
             values.put("argument", f.getName());
             throw new H2OIllegalArgumentException("Required field " + f.getName() + " not specified",
@@ -495,7 +501,7 @@ public class Schema<I extends Iced, S extends Schema<I,S>> extends Iced {
       if (inside.length() == 0)
         splits = new String[] {};
       else
-          splits = inside.split(",");
+        splits = splitArgs(inside);
       Class<E> afclz = (Class<E>)fclz.getComponentType();
       E[] a = null;
       // Can't cast an int[] to an Object[].  Sigh.
@@ -503,22 +509,24 @@ public class Schema<I extends Iced, S extends Schema<I,S>> extends Iced {
         a = (E[]) Array.newInstance(Integer.class, splits.length);
       } else if (afclz == double.class) {
         a = (E[]) Array.newInstance(Double.class, splits.length);
+      } else if (afclz == float.class) {
+        a = (E[]) Array.newInstance(Float.class, splits.length);
       } else {
         // Fails with primitive classes; need the wrapper class.  Thanks, Java.
         a = (E[]) Array.newInstance(afclz, splits.length);
       }
 
       for( int i=0; i<splits.length; i++ ) {
-        if (String.class == afclz || KeyV1.class.isAssignableFrom(afclz)) {
+        if (String.class == afclz || KeyV3.class.isAssignableFrom(afclz)) {
           // strip quotes off string values inside array
           String stripped = splits[i].trim();
 
           if ("null".equals(stripped)) {
             a[i] = null;
           } else if (! stripped.startsWith("\"") || ! stripped.endsWith("\"")) {
-            String msg = "Illegal argument for field: " + field_name + " of schema: " + this.getClass().getSimpleName() + ": string and key arrays' values must be quoted, but the client sent: " + stripped;
+            String msg = "Illegal argument for field: " + field_name + " of schema: " + this.getClass().getSimpleName() + ": string and key arrays' values must be double quoted, but the client sent: " + stripped;
 
-            IcedHashMap values = new IcedHashMap<String, Object>();
+            IcedHashMap.IcedHashMapStringObject values = new IcedHashMap.IcedHashMapStringObject();
             values.put("function", fclz.getSimpleName() + ".fillFromParms()");
             values.put("argument", field_name);
             values.put("value", stripped);
@@ -540,41 +548,41 @@ public class Schema<I extends Iced, S extends Schema<I,S>> extends Iced {
       else if (!required && (s == null || s.length() == 0)) return null;
       else return Key.make(s.startsWith("\"") ? s.substring(1, s.length() - 1) : s); // If the key name is in an array we need to trim surrounding quotes.
 
-    if( KeyV1.class.isAssignableFrom(fclz) ) {
+    if( KeyV3.class.isAssignableFrom(fclz) ) {
       if ((s == null || s.length() == 0) && required) throw new H2OKeyNotFoundArgumentException(field_name, s);
       if (!required && (s == null || s.length() == 0)) return null;
 
-      return KeyV1.make(fclz, Key.make(s.startsWith("\"") ? s.substring(1, s.length() - 1) : s)); // If the key name is in an array we need to trim surrounding quotes.
+      return KeyV3.make(fclz, Key.make(s.startsWith("\"") ? s.substring(1, s.length() - 1) : s)); // If the key name is in an array we need to trim surrounding quotes.
     }
 
     if( Enum.class.isAssignableFrom(fclz) )
       return Enum.valueOf(fclz,s);
 
     // TODO: these can be refactored into a single case using the facilities in Schema:
-    if( FrameV2.class.isAssignableFrom(fclz) )
+    if( FrameV3.class.isAssignableFrom(fclz) )
       if( (s==null || s.length()==0) && required ) throw new H2OKeyNotFoundArgumentException(field_name, s);
       else if (!required && (s == null || s.length() == 0)) return null;
       else {
         Value v = DKV.get(s);
         if (null == v) return null; // not required
         if (! v.isFrame()) throw H2OIllegalArgumentException.wrongKeyType(field_name, s, "Frame", v.get().getClass());
-        return new FrameV2((Frame) v.get()); // TODO: version!
+        return new FrameV3((Frame) v.get()); // TODO: version!
       }
 
-    if( JobV2.class.isAssignableFrom(fclz) )
+    if( JobV3.class.isAssignableFrom(fclz) )
       if( (s==null || s.length()==0) && required ) throw new H2OKeyNotFoundArgumentException(s);
       else if (!required && (s == null || s.length() == 0)) return null;
       else {
         Value v = DKV.get(s);
         if (null == v) return null; // not required
         if (! v.isJob()) throw H2OIllegalArgumentException.wrongKeyType(field_name, s, "Job", v.get().getClass());
-        return new JobV2().fillFromImpl((Job) v.get()); // TODO: version!
+        return new JobV3().fillFromImpl((Job) v.get()); // TODO: version!
       }
 
     // TODO: for now handle the case where we're only passing the name through; later we need to handle the case
     // where the frame name is also specified.
-    if ( FrameV2.ColSpecifierV2.class.isAssignableFrom(fclz)) {
-        return new FrameV2.ColSpecifierV2(s);
+    if ( FrameV3.ColSpecifierV2.class.isAssignableFrom(fclz)) {
+        return new FrameV3.ColSpecifierV2(s);
     }
 
     if( ModelSchema.class.isAssignableFrom(fclz) )
@@ -598,6 +606,35 @@ public class Schema<I extends Iced, S extends Schema<I,S>> extends Iced {
   }
   private boolean peek( String s, int x, char c ) { return x < s.length() && s.charAt(x) == c; }
 
+  // Splits on commas, but ignores commas in double quotes.  Required
+  // since using a regex blow the stack on long column counts
+  // TODO: detect and complain about malformed JSON
+  private static String[] splitArgs(String argStr) {
+    StringBuffer sb = new StringBuffer (argStr);
+    StringBuffer arg = new StringBuffer ();
+    List<String> splitArgList = new ArrayList<String> ();
+    boolean inDoubleQuotes = false;
+
+    for (int i=0; i < sb.length(); i++) {
+      if (sb.charAt (i) == '"' && !inDoubleQuotes) {
+        inDoubleQuotes = true;
+        arg.append(sb.charAt(i));
+      } else if (sb.charAt(i) == '"' && inDoubleQuotes) {
+        inDoubleQuotes = false;
+        arg.append(sb.charAt(i));
+      } else if (sb.charAt(i) == ',' && !inDoubleQuotes) {
+        splitArgList.add(arg.toString());
+        // clear the field for next word
+        arg.setLength(0);
+      } else {
+        arg.append(sb.charAt(i));
+      }
+    }
+    if (arg.length() > 0)
+      splitArgList.add(arg.toString());
+
+    return splitArgList.toArray(new String[splitArgList.size()]);
+  }
 
   private static boolean schemas_registered = false;
   /**
@@ -834,7 +871,7 @@ public class Schema<I extends Iced, S extends Schema<I,S>> extends Iced {
       // TODO: render examples and other stuff, if it's passed in
     }
     catch (Exception e) {
-      IcedHashMap values = new IcedHashMap();
+      IcedHashMap.IcedHashMapStringObject values = new IcedHashMap.IcedHashMapStringObject();
       values.put("schema", this);
       // TODO: This isn't quite the right exception type:
       throw new H2OIllegalArgumentException("Caught exception using reflection on schema: " + this,

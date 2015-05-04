@@ -8,7 +8,7 @@ import water.fvec.Vec;
 import water.util.Log;
 
 import hex.ModelBuilder;
-import hex.schemas.Word2VecV2;
+import hex.schemas.Word2VecV3;
 import hex.schemas.ModelBuilderSchema;
 import hex.word2vec.Word2VecModel.*;
 
@@ -20,12 +20,14 @@ public class Word2Vec extends ModelBuilder<Word2VecModel,Word2VecModel.Word2VecP
     };
   }
 
+  @Override public BuilderVisibility builderVisibility() { return BuilderVisibility.Experimental; };
+
   public enum WordModel { SkipGram, CBOW }
   public enum NormModel { HSM, NegSampling }
 
   public Word2Vec(Word2VecModel.Word2VecParameters parms) { super("Word2Vec", parms); }
 
-  public ModelBuilderSchema schema() { return new Word2VecV2(); }
+  public ModelBuilderSchema schema() { return new Word2VecV3(); }
 
   /** Start the KMeans training Job on an F/J thread. */
   @Override public Job<Word2VecModel> trainModel() { return start(new Word2VecDriver(), _parms._epochs); }

@@ -8,7 +8,7 @@ test.DRF.SWpreds <- function(conn) {
 
   Log.info("Importing swpreds_1000x3.csv data...\n")
   swpreds.hex <- h2o.uploadFile(conn,
-      locate("smalldata/gbm_test/swpreds_1000x3.csv"), key = "swpreds.hex")
+      locate("smalldata/gbm_test/swpreds_1000x3.csv"), destination_frame = "swpreds.hex")
   swpreds.hex[,3] <- as.factor(swpreds.hex[,3])
   Log.info("Summary of swpreds_1000x3.csv from H2O:\n")
   print(summary(swpreds.hex))
@@ -29,7 +29,7 @@ test.DRF.SWpreds <- function(conn) {
 
   # BUG? With noise, seems like AUC and/or prediction error can be slightly better with naive rather than group split
   #      This behavior is inconsistent over repeated runs when the seed is different
-  # expect_true(drfmodel.grpsplit2@model$auc >= drfmodel.nogrp2@model$auc - tol)
+  # expect_true(drfmodel.grpsplit2@model$AUC >= drfmodel.nogrp2@model$AUC - tol)
   # expect_true(drfmodel.grpsplit2@model$confusion[3,3] <= drfmodel.nogrp2@model$confusion[3,3] + tol)
 
   testEnd()

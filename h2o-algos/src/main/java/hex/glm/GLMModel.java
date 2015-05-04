@@ -1,14 +1,17 @@
 package hex.glm;
 
 import hex.*;
-import hex.ModelMetricsBinomial.MetricBuilderBinomial;
 import hex.glm.GLMModel.GLMParameters.Family;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 import water.*;
 import water.DTask.DKeyTask;
 import water.H2O.H2OCountedCompleter;
 import water.fvec.Chunk;
 import water.fvec.Frame;
 import water.fvec.Vec;
+import water.util.*;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.concurrent.ExecutionException;
@@ -19,14 +22,16 @@ import java.util.concurrent.Future;
  */
 public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GLMModel.GLMOutput> {
   final DataInfo _dinfo;
-  public GLMModel(Key selfKey, GLMParameters parms, GLMOutput output, DataInfo dinfo, double ymu, double lambda_max, long nobs) {
+  public GLMModel(Key selfKey, GLMParameters parms, GLMOutput output, DataInfo dinfo, double ymu, double ySigma, double lambda_max, long nobs) {
     super(selfKey, parms, output);
     _ymu = ymu;
+    _ySigma = ySigma;
     _lambda_max = lambda_max;
     _nobs = nobs;
     _dinfo = dinfo;
   }
 
+<<<<<<< HEAD
   public DataInfo dinfo() { return _dinfo; }
 
   public static class GLMMetricsBuilderBinomial<T extends GLMMetricsBuilderBinomial<T>> extends MetricBuilderBinomial<T> {
@@ -67,8 +72,19 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
       double mse = _sumsqe / _count;
       ModelMetrics res = new ModelMetricsBinomialGLM(m, f, mse, _domain, sigma, auc, _resDev, _nullDev, _resDev + 2*rank(gm.beta()));
       return m._output.addModelMetrics(res);
+=======
+  @Override
+  protected boolean toJavaCheckTooBig() {
+    if(beta().length > 10000) {
+      Log.warn("toJavaCheckTooBig must be overridden for this model type to render it in the browser");
+      return true;
+>>>>>>> arno_jenkins
     }
+    return false;
   }
+
+  public DataInfo dinfo() { return _dinfo; }
+  
   public static class GetScoringModelTask extends DTask.DKeyTask<GetScoringModelTask,GLMModel> {
     final double _lambda;
     public GLMModel _res;
@@ -84,16 +100,18 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
       assert sm != null : "GLM[" + m._key + "]: missing submodel for lambda " + _lambda;
       sm = (Submodel) sm.clone();
       _res._output._submodels = new Submodel[]{sm};
-      _res._output.setSubmodelIdx(0);
+      _res._output.setSubmodelIdx(0, _res,null, null);
     }
+  }
+  private int rank(double [] ds) {
+    int res = 0;
+    for(double d:ds)
+      if(d != 0) ++res;
+    return res;
   }
 
   @Override public ModelMetrics.MetricBuilder makeMetricBuilder(String[] domain) {
-    switch(_output.getModelCategory()) {
-      case Binomial: return new GLMMetricsBuilderBinomial(domain);
-      case Regression: return new ModelMetricsRegression.MetricBuilderRegression();
-      default: throw H2O.unimpl();
-    }
+    return new GLMValidation(domain,_ymu, _parms, rank(beta()), _output._threshold);
   }
 
   public double [] beta() { return _output._global_beta;}
@@ -107,48 +125,23 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
   public double[] score0(Chunk[] chks, int row_in_chunk, double[] tmp, double[] preds) {
     double eta = 0.0;
     final double [] b = beta();
-    if(!_parms._use_all_factor_levels){ // good level 0 of all factors
-      for(int i = 0; i < _dinfo._catOffsets.length-1; ++i) if(chks[i].atd(row_in_chunk) != 0)
-        eta += b[_dinfo._catOffsets[i] + (int)(chks[i].atd(row_in_chunk)-1)];
-    } else { // do not good any levels!
-      for(int i = 0; i < _dinfo._catOffsets.length-1; ++i)
-        eta += b[_dinfo._catOffsets[i] + (int)chks[i].atd(row_in_chunk)];
+    for(int i = 0; i < _dinfo._catOffsets.length-1; ++i) {
+      if(chks[i].isNA(row_in_chunk)) {
+        eta = Double.NaN;
+        break;
+      }
+      long lval = chks[i].at8(row_in_chunk);
+      int ival = (int)lval;
+      if(ival != lval) throw new IllegalArgumentException("categorical value out of range");
+      if(_parms._use_all_factor_levels)
+        eta += b[_dinfo._catOffsets[i] + ival];
+      else if(ival != 0)
+        eta += b[_dinfo._catOffsets[i] + ival - 1];
     }
-    final int noff = _dinfo.numStart() - _dinfo._cats;
+    final int noff = _dinfo.numStart() - _dinfo._cats ;
     for(int i = _dinfo._cats; i < b.length-1-noff; ++i)
       eta += b[noff+i]*chks[i].atd(row_in_chunk);
-    eta += b[b.length-1]; // add intercept
-    double mu = _parms.linkInv(eta);
-    preds[0] = mu;
-    if( _parms._family == Family.binomial ) { // threshold for prediction
-      if(Double.isNaN(mu)){
-        preds[0] = Double.NaN;
-        preds[1] = Double.NaN;
-        preds[2] = Double.NaN;
-      } else {
-        preds[0] = (mu >= _output._threshold ? 1 : 0);
-        preds[1] = 1.0 - mu; // class 0
-        preds[2] =       mu; // class 1
-      }
-    }
-    return preds;
-  }
-
-  @Override
-  protected double[] score0(double[] data, double[] preds) {
-    double eta = 0.0;
-    final double [] b = beta();
-    if(!_parms._use_all_factor_levels){ // good level 0 of all factors
-      for(int i = 0; i < _dinfo._catOffsets.length-1; ++i) if(data[i] != 0)
-        eta += b[_dinfo._catOffsets[i] + (int)(data[i]-1)];
-    } else { // do not good any levels!
-      for(int i = 0; i < _dinfo._catOffsets.length-1; ++i)
-        eta += b[_dinfo._catOffsets[i] + (int)data[i]];
-    }
-    final int noff = _dinfo.numStart() - _dinfo._cats;
-    for(int i = _dinfo._cats; i < data.length; ++i)
-      eta += b[noff+i]*data[i];
-    eta += b[b.length-1]; // add intercept
+    eta += b[b.length-1]; // intercept
     double mu = _parms.linkInv(eta);
     preds[0] = mu;
     if( _parms._family == Family.binomial ) { // threshold for prediction
@@ -169,11 +162,11 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
     // public int _response; // TODO: the standard is now _response_column in SupervisedModel.SupervisedParameters
     public boolean _standardize = true;
     public Family _family;
-    public Link _link;
-    public Solver _solver = Solver.ADMM;
+    public Link _link = Link.family_default;
+    public Solver _solver = Solver.IRLSM;
     public final double _tweedie_variance_power;
     public final double _tweedie_link_power;
-    public double [] _alpha;
+    public double [] _alpha = null;
     public double [] _lambda = null;
     public double _prior = -1;
     public boolean _lambda_search = false;
@@ -183,10 +176,11 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
     public double _beta_epsilon = 1e-4;
     public int _max_iterations = -1;
     public int _n_folds;
+    boolean _intercept = true;
 
     public Key<Frame> _beta_constraints = null;
     // internal parameter, handle with care. GLM will stop when there is more than this number of active predictors (after strong rule screening)
-    public int _max_active_predictors = 10000; // NOTE: Not brought out to the REST API
+    public int _max_active_predictors = -1;
 
     public void validate(GLM glm) {
       if(_n_folds < 0) glm.error("n_folds","must be >= 0");
@@ -223,11 +217,6 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
           }
         }
       }
-      if (_solver == Solver.L_BFGS) {
-        glm.hide("_alpha", "L1 penalty is currently only available for ADMM solver.");
-        glm.hide("_higher_accuracy","only available for ADMM");
-        _alpha = new double[]{0};
-      }
       if(!_lambda_search) {
         glm.hide("_lambda_min_ratio", "only applies if lambda search is on.");
         glm.hide("_nlambdas", "only applies if lambda search is on.");
@@ -240,7 +229,7 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
             break;
           case binomial:
             if (_link != Link.logit && _link != Link.log)
-              throw new IllegalArgumentException("Incompatible link function for selected family. Only logit and log links are allowed for family=binomial.");
+              throw new IllegalArgumentException("Incompatible link function for selected family. Only logit and log links are allowed for family=binomial. Got " + _link);
             break;
           case poisson:
             if (_link != Link.log && _link != Link.identity)
@@ -250,10 +239,10 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
             if (_link != Link.inverse && _link != Link.log && _link != Link.identity)
               throw new IllegalArgumentException("Incompatible link function for selected family. Only inverse, log and identity links are allowed for family=gamma.");
             break;
-          case tweedie:
-            if (_link != Link.tweedie)
-              throw new IllegalArgumentException("Incompatible link function for selected family. Only tweedie link allowed for family=tweedie.");
-            break;
+//          case tweedie:
+//            if (_link != Link.tweedie)
+//              throw new IllegalArgumentException("Incompatible link function for selected family. Only tweedie link allowed for family=tweedie.");
+//            break;
           default:
             H2O.fail();
         }
@@ -265,7 +254,7 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
       assert _link == Link.family_default;
     }
     public GLMParameters(Family f){this(f,f.defaultLink);}
-    public GLMParameters(Family f, Link l){this(f,l,null,new double[]{.5});}
+    public GLMParameters(Family f, Link l){this(f,l,null, null);}
     public GLMParameters(Family f, Link l, double [] lambda, double [] alpha){
       this._family = f;
       this._lambda = lambda;
@@ -288,23 +277,16 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
         case gaussian:
           return 1;
         case binomial:
-//        assert (0 <= mu && mu <= 1) : "mu out of bounds<0,1>:" + mu;
           return mu * (1 - mu);
         case poisson:
           return mu;
         case gamma:
           return mu * mu;
-        case tweedie:
-          return Math.pow(mu, _tweedie_variance_power);
+//        case tweedie:
+//          return Math.pow(mu, _tweedie_variance_power);
         default:
           throw new RuntimeException("unknown family Id " + this);
       }
-    }
-
-    public double [] nullModelBeta(DataInfo dinfo, double ymu){
-      double [] res = MemoryManager.malloc8d(dinfo.fullN() + 1);
-      res[res.length-1] = link(ymu);
-      return res;
     }
 
     public final boolean canonical(){
@@ -316,30 +298,15 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
         case poisson:
           return _link == Link.log;
         case gamma:
-          return false; //return link == Link.inverse;
-        case tweedie:
-          return false;
+          return _link == Link.inverse;
+//        case tweedie:
+//          return false;
         default:
           throw H2O.unimpl();
       }
     }
 
-    public final double mustart(double y, double ymu) {
-      switch(_family) {
-        case gaussian:
-        case binomial:
-        case poisson:
-          return ymu;
-        case gamma:
-          return y;
-        case tweedie:
-          return y + (y==0?0.1:0);
-        default:
-          throw new RuntimeException("unimplemented");
-      }
-    }
-
-    public final double deviance(double yr, double eta, double ym){
+    public final double deviance(double yr, double ym){
       switch(_family){
         case gaussian:
           return (yr - ym) * (yr - ym);
@@ -353,13 +320,13 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
         case gamma:
           if( yr == 0 ) return -2;
           return -2 * (Math.log(yr / ym) - (yr - ym) / ym);
-        case tweedie:
-          // Theory of Dispersion Models: Jorgensen
-          // pg49: $$ d(y;\mu) = 2 [ y \cdot \left(\tau^{-1}(y) - \tau^{-1}(\mu) \right) - \kappa \{ \tau^{-1}(y)\} + \kappa \{ \tau^{-1}(\mu)\} ] $$
-          // pg133: $$ \frac{ y^{2 - p} }{ (1 - p) (2-p) }  - \frac{y \cdot \mu^{1-p}}{ 1-p} + \frac{ \mu^{2-p} }{ 2 - p }$$
-          double one_minus_p = 1 - _tweedie_variance_power;
-          double two_minus_p = 2 - _tweedie_variance_power;
-          return Math.pow(yr, two_minus_p) / (one_minus_p * two_minus_p) - (yr * (Math.pow(ym, one_minus_p)))/one_minus_p + Math.pow(ym, two_minus_p)/two_minus_p;
+//        case tweedie:
+//          // Theory of Dispersion Models: Jorgensen
+//          // pg49: $$ d(y;\mu) = 2 [ y \cdot \left(\tau^{-1}(y) - \tau^{-1}(\mu) \right) - \kappa \{ \tau^{-1}(y)\} + \kappa \{ \tau^{-1}(\mu)\} ] $$
+//          // pg133: $$ \frac{ y^{2 - p} }{ (1 - p) (2-p) }  - \frac{y \cdot \mu^{1-p}}{ 1-p} + \frac{ \mu^{2-p} }{ 2 - p }$$
+//          double one_minus_p = 1 - _tweedie_variance_power;
+//          double two_minus_p = 2 - _tweedie_variance_power;
+//          return Math.pow(yr, two_minus_p) / (one_minus_p * two_minus_p) - (yr * (Math.pow(ym, one_minus_p)))/one_minus_p + Math.pow(ym, two_minus_p)/two_minus_p;
         default:
           throw new RuntimeException("unknown family " + _family);
       }
@@ -378,13 +345,13 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
         case gamma:
           if( yr == 0 ) return -2;
           return -2 * (Math.log(yr / ym) - (yr - ym) / ym);
-        case tweedie:
-          // Theory of Dispersion Models: Jorgensen
-          // pg49: $$ d(y;\mu) = 2 [ y \cdot \left(\tau^{-1}(y) - \tau^{-1}(\mu) \right) - \kappa \{ \tau^{-1}(y)\} + \kappa \{ \tau^{-1}(\mu)\} ] $$
-          // pg133: $$ \frac{ y^{2 - p} }{ (1 - p) (2-p) }  - \frac{y \cdot \mu^{1-p}}{ 1-p} + \frac{ \mu^{2-p} }{ 2 - p }$$
-          double one_minus_p = 1 - _tweedie_variance_power;
-          double two_minus_p = 2 - _tweedie_variance_power;
-          return Math.pow(yr, two_minus_p) / (one_minus_p * two_minus_p) - (yr * (Math.pow(ym, one_minus_p)))/one_minus_p + Math.pow(ym, two_minus_p)/two_minus_p;
+//        case tweedie:
+//          // Theory of Dispersion Models: Jorgensen
+//          // pg49: $$ d(y;\mu) = 2 [ y \cdot \left(\tau^{-1}(y) - \tau^{-1}(\mu) \right) - \kappa \{ \tau^{-1}(y)\} + \kappa \{ \tau^{-1}(\mu)\} ] $$
+//          // pg133: $$ \frac{ y^{2 - p} }{ (1 - p) (2-p) }  - \frac{y \cdot \mu^{1-p}}{ 1-p} + \frac{ \mu^{2-p} }{ 2 - p }$$
+//          double one_minus_p = 1 - _tweedie_variance_power;
+//          double two_minus_p = 2 - _tweedie_variance_power;
+//          return Math.pow(yr, two_minus_p) / (one_minus_p * two_minus_p) - (yr * (Math.pow(ym, one_minus_p)))/one_minus_p + Math.pow(ym, two_minus_p)/two_minus_p;
         default:
           throw new RuntimeException("unknown family " + _family);
       }
@@ -396,7 +363,10 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
           return .5 * (yr - ym) * (yr - ym);
         case binomial:
           if(yr == ym) return 0;
-          return Math.log(1 + Math.exp((1 - 2*yr) * eta));
+          return .5 * deviance(yr, ym);
+//          double res = Math.log(1 + Math.exp((1 - 2*yr) * eta));
+//          assert Math.abs(res - .5 * deviance(yr,eta,ym)) < 1e-8:res + " != " + .5*deviance(yr,eta,ym) +" yr = "  + yr + ", ym = " + ym + ", eta = " + eta;
+//          return res;
 //
 //          double res = -yr * eta - Math.log(1 - ym);
 //          return res;
@@ -406,13 +376,13 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
         case gamma:
           if( yr == 0 ) return -2;
           return -2 * (Math.log(yr / ym) - (yr - ym) / ym);
-        case tweedie:
-          // Theory of Dispersion Models: Jorgensen
-          // pg49: $$ d(y;\mu) = 2 [ y \cdot \left(\tau^{-1}(y) - \tau^{-1}(\mu) \right) - \kappa \{ \tau^{-1}(y)\} + \kappa \{ \tau^{-1}(\mu)\} ] $$
-          // pg133: $$ \frac{ y^{2 - p} }{ (1 - p) (2-p) }  - \frac{y \cdot \mu^{1-p}}{ 1-p} + \frac{ \mu^{2-p} }{ 2 - p }$$
-          double one_minus_p = 1 - _tweedie_variance_power;
-          double two_minus_p = 2 - _tweedie_variance_power;
-          return Math.pow(yr, two_minus_p) / (one_minus_p * two_minus_p) - (yr * (Math.pow(ym, one_minus_p)))/one_minus_p + Math.pow(ym, two_minus_p)/two_minus_p;
+//        case tweedie:
+//          // Theory of Dispersion Models: Jorgensen
+//          // pg49: $$ d(y;\mu) = 2 [ y \cdot \left(\tau^{-1}(y) - \tau^{-1}(\mu) \right) - \kappa \{ \tau^{-1}(y)\} + \kappa \{ \tau^{-1}(\mu)\} ] $$
+//          // pg133: $$ \frac{ y^{2 - p} }{ (1 - p) (2-p) }  - \frac{y \cdot \mu^{1-p}}{ 1-p} + \frac{ \mu^{2-p} }{ 2 - p }$$
+//          double one_minus_p = 1 - _tweedie_variance_power;
+//          double two_minus_p = 2 - _tweedie_variance_power;
+//          return Math.pow(yr, two_minus_p) / (one_minus_p * two_minus_p) - (yr * (Math.pow(ym, one_minus_p)))/one_minus_p + Math.pow(ym, two_minus_p)/two_minus_p;
         default:
           throw new RuntimeException("unknown family " + _family);
       }
@@ -431,8 +401,8 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
         case inverse:
           double xx = (x < 0) ? Math.min(-1e-5, x) : Math.max(1e-5, x);
           return 1.0 / xx;
-        case tweedie:
-          return Math.pow(x, _tweedie_link_power);
+//        case tweedie:
+//          return Math.pow(x, _tweedie_link_power);
         default:
           throw new RuntimeException("unknown link function " + this);
       }
@@ -450,8 +420,8 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
           return 1.0 / x;
         case inverse:
           return -1.0 / (x * x);
-        case tweedie:
-          return _tweedie_link_power * Math.pow(x, _tweedie_link_power - 1);
+//        case tweedie:
+//          return _tweedie_link_power * Math.pow(x, _tweedie_link_power - 1);
         default:
           throw H2O.unimpl();
       }
@@ -468,8 +438,8 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
         case inverse:
           double xx = (x < 0) ? Math.min(-1e-5, x) : Math.max(1e-5, x);
           return 1.0 / xx;
-        case tweedie:
-          return Math.pow(x, 1/ _tweedie_link_power);
+//        case tweedie:
+//          return Math.pow(x, 1/ _tweedie_link_power);
         default:
           throw new RuntimeException("unexpected link function id  " + this);
       }
@@ -489,9 +459,9 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
         case inverse:
           double xx = (x < 0) ? Math.min(-1e-5, x) : Math.max(1e-5, x);
           return -1 / (xx * xx);
-        case tweedie:
-          double vp = (1. - _tweedie_link_power) / _tweedie_link_power;
-          return (1/ _tweedie_link_power) * Math.pow(x, vp);
+//        case tweedie:
+//          double vp = (1. - _tweedie_link_power) / _tweedie_link_power;
+//          return (1/ _tweedie_link_power) * Math.pow(x, vp);
         default:
           throw new RuntimeException("unexpected link function id  " + this);
       }
@@ -500,13 +470,13 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
     // supported families
     public enum Family {
       gaussian(Link.identity), binomial(Link.logit), poisson(Link.log),
-      gamma(Link.inverse), tweedie(Link.tweedie);
+      gamma(Link.inverse)/*, tweedie(Link.tweedie)*/;
       public final Link defaultLink;
       Family(Link link){defaultLink = link;}
     }
-    public static enum Link {family_default, identity, logit, log,inverse,tweedie}
+    public static enum Link {family_default, identity, logit, log,inverse,/* tweedie*/}
 
-    public static enum Solver {ADMM, L_BFGS}
+    public static enum Solver {AUTO, IRLSM, L_BFGS, COORDINATE_DESCENT}
 
     // helper function
     static final double y_log_y(double y, double mu) {
@@ -559,7 +529,7 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
       this.sparseCoef = sparseCoef;
     }
   }
-  public static void setSubmodel(H2O.H2OCountedCompleter cmp, Key modelKey, final double lambda, double[] beta, double[] norm_beta, final int iteration, long runtime, boolean sparseCoef, final GLMValidation trainVal, final GLMValidation holdOutval){
+  public static void setSubmodel(H2O.H2OCountedCompleter cmp, Key modelKey, final double lambda, double[] beta, double[] norm_beta, final int iteration, long runtime, boolean sparseCoef, final GLMValidation trainVal, final GLMValidation holdOutval, final Frame tFrame, final Frame vFrame){
     final Submodel sm = new Submodel(lambda,beta, norm_beta, runtime, iteration,sparseCoef);
     sm.trainVal = trainVal;
     sm.holdOutVal = holdOutval;
@@ -584,11 +554,14 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
             old._output = (GLMOutput)old._output.clone();
             old._output._submodels = sms;
           } else {
-            if (old._output._submodels[id].iteration < sm.iteration)
+            if (old._output._submodels[id].iteration <= sm.iteration)
               old._output._submodels[id] = sm;
           }
         }
-        old._output.pickBestModel(false);
+//        can not call pickBestSubmodel now, pickBestSubmodel will call makeModelMEtrics which in turns calls Frame.checksum
+//        which will request RollupStats and taht will hit assertion error since we are in TAtomic and would thus be blocking on task with the same prioriry
+//        should be ok to pickBestModel only at the very end, may need to revisit if showing incremental results...
+//        old._output.pickBestModel(false, old, tFrame, vFrame);
         old._run_time = Math.max(old._run_time,sm.run_time);
         return old;
       }
@@ -596,135 +569,149 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
     if(cmp == null && f != null) try {
       f.get();
     } catch (InterruptedException e) {
-      e.printStackTrace();
+      throw new RuntimeException(e);
     } catch (ExecutionException e) {
-      e.printStackTrace();
+      throw new RuntimeException(e);
     }
   }
 
   public int rank(double lambda){return -1;}
   
-  final double _lambda_max;
-  final double _ymu;
-  final long   _nobs;
+  public final double _lambda_max;
+  public final double _ymu;
+  public final double _ySigma;
+
+  public final long   _nobs;
   long   _run_time;
   
   public static class GLMOutput extends SupervisedModel.SupervisedOutput {
-    Submodel [] _submodels;
-    String [] _coefficient_names;
-    int         _best_lambda_idx;
-    double      _threshold;
-    double   [] _global_beta;
-    double 		  _residual_deviance = Double.NaN;
-    double 		  _null_deviance = Double.NaN;
-    double 		  _residual_degrees_of_freedom = Double.NaN;
-    double		  _null_degrees_of_freedom = Double.NaN;
-    double      _aic = Double.NaN;
-    double      _auc = Double.NaN;
-    public boolean     _binomial;
-    public int rank() { return _submodels[_best_lambda_idx].rank; }
-    public boolean isNormalized(){
+    Submodel[] _submodels;
+    String[] _coefficient_names;
+    int _best_lambda_idx;
+    double _threshold;
+    double[] _global_beta;
+    public boolean _binomial;
+
+
+    public int rank() {
+      return _submodels[_best_lambda_idx].rank;
+    }
+
+    public boolean isNormalized() {
       return _submodels != null && _submodels[_best_lambda_idx].norm_beta != null;
     }
-    public String [] coefficientNames(){return _coefficient_names;}
 
-    public GLMOutput(String [] column_names, String [][] domains, String [] coefficient_names, double [] coefficients, float threshold, boolean binomial){
+    public String[] coefficientNames() {
+      return _coefficient_names;
+    }
+
+    public GLMOutput(String[] column_names, String[][] domains, String[] coefficient_names, double[] coefficients, float threshold, boolean binomial) {
       _names = column_names;
       _domains = domains;
       _global_beta = coefficients;
       _coefficient_names = coefficient_names;
-      _submodels = new Submodel[]{new Submodel(-1,coefficients,null,-1,-1,false)};
+      _submodels = new Submodel[]{new Submodel(-1, coefficients, null, -1, -1, false)};
       _threshold = threshold;
       _binomial = binomial;
     }
+
     public GLMOutput() { }
-    public GLMOutput(GLM glm){
+
+    public GLMOutput(GLM glm) {
       super(glm);
-      String [] cnames = glm._dinfo.coefNames();
+      String[] cnames = glm._dinfo.coefNames();
       _names = glm._dinfo._adaptedFrame.names();
-      _coefficient_names = Arrays.copyOf(cnames,cnames.length+1);
-      _coefficient_names[cnames.length] = "Intercept";
+      _coefficient_names = Arrays.copyOf(cnames, cnames.length + 1);
+      _coefficient_names[_coefficient_names.length-1] = "Intercept";
       _binomial = glm._parms._family == Family.binomial;
     }
 
     @Override
     public int nclasses() {
-      return _binomial?2:1;
+      return _binomial ? 2 : 1;
     }
-    private static String [] binomialClassNames = new String[]{"0","1"};
-    @Override public String [] classNames(){
-      return _binomial?binomialClassNames:null;
+
+    private static String[] binomialClassNames = new String[]{"0", "1"};
+
+    @Override
+    public String[] classNames() {
+      return _binomial ? binomialClassNames : null;
     }
-    void addNullSubmodel(double lmax,double icept, GLMValidation val){
-      assert _submodels == null;
-      double [] beta = MemoryManager.malloc8d(_names.length);
-      beta[beta.length-1] = icept;
-      _submodels = new Submodel[]{new Submodel(lmax,beta,beta,0,0,_names.length > 750)};
-      _submodels[0].trainVal = val;
-    }
-    public int  submodelIdForLambda(double lambda){
-      if(lambda >= _submodels[0].lambda_value) return 0;
-      int i = _submodels.length-1;
-      for(;i >=0; --i)
+
+
+
+    public int submodelIdForLambda(double lambda) {
+      if (lambda >= _submodels[0].lambda_value) return 0;
+      int i = _submodels.length - 1;
+      for (; i >= 0; --i)
         // first condition to cover lambda == 0 case (0/0 is Inf in java!)
-        if(lambda == _submodels[i].lambda_value || Math.abs(_submodels[i].lambda_value - lambda)/lambda < 1e-5)
+        if (lambda == _submodels[i].lambda_value || Math.abs(_submodels[i].lambda_value - lambda) / lambda < 1e-5)
           return i;
-        else if(_submodels[i].lambda_value > lambda)
-          return -i-2;
+        else if (_submodels[i].lambda_value > lambda)
+          return -i - 2;
       return -1;
     }
-    public Submodel  submodelForLambda(double lambda){
+
+    public Submodel submodelForLambda(double lambda) {
       return _submodels[submodelIdForLambda(lambda)];
     }
+
     public int rank(double lambda) {
       Submodel sm = submodelForLambda(lambda);
-      if(sm == null)return 0;
+      if (sm == null) return 0;
       return submodelForLambda(lambda).rank;
     }
-    public void pickBestModel(boolean useAuc){
-      int bestId = _submodels.length-1;
-      if(_submodels.length > 2) {
+
+    public void pickBestModel(boolean useAuc, GLMModel m, Frame tFrame, Frame vFrame) {
+      int bestId = _submodels.length - 1;
+      if (_submodels.length > 2) {
         boolean xval = false;
         boolean hval = false;
         GLMValidation bestVal = null;
-        if(_submodels[1].xVal != null) { // skip null model
+        if (_submodels[1].xVal != null) { // skip null model
           xval = true;
           bestVal = _submodels[1].xVal;
-        }
-        else if(_submodels[1].holdOutVal != null) {
+        } else if (_submodels[1].holdOutVal != null) {
           hval = true;
           bestVal = _submodels[1].holdOutVal;
         } else
           bestVal = _submodels[0].trainVal;
         for (int i = 1; i < _submodels.length; ++i) {
-          GLMValidation val = xval ? _submodels[i].xVal : hval?_submodels[i].holdOutVal:_submodels[i].trainVal;
+          GLMValidation val = xval ? _submodels[i].xVal : hval ? _submodels[i].holdOutVal : _submodels[i].trainVal;
+          Frame f = hval ? vFrame : tFrame;
           if (val == null || val == bestVal) continue;
-          if ((useAuc && val.auc() > bestVal.auc()) || val.residual_deviance < bestVal.residual_deviance) {
+          if ((useAuc && val.computeAUC(m.clone(), f) > bestVal.computeAUC(m, f)) || val.residual_deviance < bestVal.residual_deviance) {
             bestVal = val;
             bestId = i;
           }
         }
       }
-      setSubmodelIdx(_best_lambda_idx = bestId);
+      setSubmodelIdx(_best_lambda_idx = bestId, m, tFrame, vFrame);
     }
-    public void setSubmodelIdx(int l){
+
+    public ModelMetrics setModelMetrics(ModelMetrics mm) {
+      for (int i = 0; i < _model_metrics.length; ++i) // Dup removal
+        if (_model_metrics[i].equals(mm._key)) {
+          _model_metrics[i] = mm._key;
+          return mm;
+        }
+      _model_metrics = Arrays.copyOf(_model_metrics, _model_metrics.length + 1);
+      _model_metrics[_model_metrics.length - 1] = mm._key;
+      return mm;                // Flow coding
+    }
+
+    public void setSubmodelIdx(int l, GLMModel m, Frame tFrame, Frame vFrame){
       _best_lambda_idx = l;
-      if (_submodels[l].trainVal == null) {
-        _threshold = 0.5f;
-        _residual_deviance = Double.NaN;
-        _null_deviance = Double.NaN;
-        _residual_degrees_of_freedom = Double.NaN;
-        _null_degrees_of_freedom = Double.NaN;
-        _aic = Double.NaN;
-        _auc = Double.NaN;
-      } else {
+      if (_submodels[l].trainVal != null && tFrame != null) {
+        _training_metrics = _submodels[l].trainVal.makeModelMetrics(m,tFrame,tFrame.vec(m._output.responseName()).sigma());
+        if(_binomial)
+          _threshold =_training_metrics.auc().maxF1();
+      }
+      if(_submodels[l].holdOutVal != null && vFrame != null) {
         _threshold = _submodels[l].trainVal.bestThreshold();
-        _residual_deviance = _submodels[l].trainVal.residualDeviance();
-        _null_deviance = _submodels[l].trainVal.nullDeviance();
-        _residual_degrees_of_freedom = _submodels[l].trainVal.resDOF();
-        _null_degrees_of_freedom = _submodels[l].trainVal.nullDOF();
-        _aic = _submodels[l].trainVal.aic();
-        _auc = _submodels[l].trainVal.auc();
+        _validation_metrics = _submodels[l].holdOutVal.makeModelMetrics(m, vFrame, vFrame.vec(m._output.responseName()).sigma());
+        if(_binomial)
+          _threshold = _validation_metrics.auc().maxF1();
       }
       if(_global_beta == null) _global_beta = MemoryManager.malloc8d(_coefficient_names.length);
       else Arrays.fill(_global_beta,0);
@@ -738,20 +725,21 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
   }
 
   public static void setXvalidation(H2OCountedCompleter cmp, Key modelKey, final double lambda, final GLMValidation val){
-    // expected cmp has already set correct pending count
-    new TAtomic<GLMModel>(cmp){
-      @Override
-      public GLMModel atomic(GLMModel old) {
-        if(old == null)return old; // job could've been cancelled
-        old._output._submodels = old._output._submodels.clone();
-        int id = old._output.submodelIdForLambda(lambda);
-        old._output._submodels[id] = (Submodel)old._output._submodels[id].clone();
-        old._output._submodels[id].xVal = val;
-        old._output.pickBestModel(false);
-
-        return old;
-      }
-    }.fork(modelKey);
+    throw H2O.unimpl();
+//    // expected cmp has already set correct pending count
+//    new TAtomic<GLMModel>(cmp){
+//      @Override
+//      public GLMModel atomic(GLMModel old) {
+//        if(old == null)return old; // job could've been cancelled
+//        old._output._submodels = old._output._submodels.clone();
+//        int id = old._output.submodelIdForLambda(lambda);
+//        old._output._submodels[id] = (Submodel)old._output._submodels[id].clone();
+//        old._output._submodels[id].xVal = val;
+//        old._output.pickBestModel(false);
+//
+//        return old;
+//      }
+//    }.fork(modelKey);
   }
   /**
    * get beta coefficients in a map indexed by name
@@ -764,24 +752,183 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
     return res;
   }
 
+  public static class ScoringHistory  extends Iced {
+    long [] _scoring_times;
+    int  [] _per_iteration_times;
+    double [] _likelihoods;
+    double [] _objectives;
+    int [] _scoring_iters;
+    int[] _scoring_lambda;
+    int[] _lambda_times;
+    int [] _lambda_iters;
+    int [] _predictors;
+    double [] _explained_dev_train;
+    double [] _explained_dev_val;
+
+    public TwoDimTable to2dTable() {
+      String [] cnames = new String[]{"timestamp", "duration","iteration", "log_likelihood", "objective"};
+      String [] ctypes = new String[]{"string","string","int", "double", "double"};
+      String []cformats = new String[]{"%s","%s","%d", "%.5f", "%.5f"};
+      if(_lambda_times != null) { // lambda search info
+        cnames =   ArrayUtils.append(cnames, new String  [] {"lambdaId","time per lambda","Number of Predictors","Explained Deviance (train)", "Explained Deviance (test)"});
+        ctypes =   ArrayUtils.append(ctypes,  new String [] {"int"                ,"int", "int",                       "double",          "double"});
+        cformats = ArrayUtils.append(cformats, new String[] {"%d",            "%d",  "%d",                        "%.3f",            "%.3f"});
+      }
+      TwoDimTable res = new TwoDimTable("Scoring History", "", new String[_scoring_iters.length], cnames , ctypes, cformats , "");
+      int j = 0;
+      DateTimeFormatter fmt = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss");
+
+      for (int i = 0; i < _scoring_iters.length; ++i) {
+        int col = 0;
+        res.set(i, col++, fmt.print(_scoring_times[i]));
+        res.set(i, col++, PrettyPrint.msecs(_scoring_times[i] - _scoring_times[0], true));
+        res.set(i, col++, _scoring_iters[i]);
+        res.set(i, col++, _likelihoods[i]);
+        res.set(i, col++, _objectives[i]);
+        if(_lambda_iters != null && _scoring_iters[i] == _lambda_iters[j]) {
+          res.set(i, col++, _scoring_lambda[j]);
+          res.set(i, col++, _lambda_times[j]);
+          res.set(i, col++, _predictors[j]);
+          res.set(i, col++, _explained_dev_train[j]);
+          if(_explained_dev_val != null && j < _explained_dev_val.length)
+            res.set(i, col++, _explained_dev_val[j]);
+          j++;
+        }
+      }
+      return res;
+    }
+  }
+
   static class FinalizeAndUnlockTsk extends DKeyTask<FinalizeAndUnlockTsk,GLMModel> {
     final Key _jobKey;
     final Key _validFrame;
-    public FinalizeAndUnlockTsk(H2OCountedCompleter cmp, Key modelKey, Key jobKey, Key validFrame){
+    final Key _trainFrame;
+
+    ScoringHistory _scoring_history;
+    final int _iter;
+
+    public FinalizeAndUnlockTsk(H2OCountedCompleter cmp, Key modelKey, Key jobKey, Key trainFrame, Key validFrame, int iter, ScoringHistory scoring_history){
       super(cmp, modelKey);
       _jobKey = jobKey;
       _validFrame = validFrame;
+      _trainFrame = trainFrame;
+      _scoring_history = scoring_history;
+      _iter = iter;
     }
+
     @Override
     protected void map(GLMModel glmModel) {
-      glmModel._output.pickBestModel(false);
-      glmModel.update(_jobKey);
-      if(_validFrame != null){
-        Frame f = DKV.getGet(_validFrame);
-        glmModel.score(f);
-        // todo: assert we got the same score as the best model
+      Frame tFrame = DKV.getGet(_trainFrame);
+      Frame vFrame = (_validFrame != null)?
+        DKV.get(_validFrame).<Frame>get():null;
+      glmModel._output.pickBestModel(glmModel._parms._family == Family.binomial, glmModel, tFrame, vFrame);
+      //  String[] colTypes,
+//      /String[] colFormats, String colHeaderForRowHeaders) {
+
+      String [] names   = new String[]{"Family","Link", "Regularization", "Number of Predictors Total","Number of Active Predictors", "Number of Iterations", "Training Frame"};
+      String [] types   = new String[]{"string","string","string","int","int","int","string"};
+      String [] formats = new String[]{"%s","%s","%s","%d","%d","%d","%s"};
+      if(glmModel._parms._lambda_search) {
+        names = new String[]{"Family", "Link", "Regularization", "Lambda Search", "Number of Predictors Total", "Number of Active Predictors", "Number of Iterations", "Training Frame"};
+        types   = new String[]{"string","string","string","string","int","int","int","string"};
+        formats = new String[]{"%s","%s","%s","%s","%d","%d","%d","%s"};
       }
+      glmModel._output._model_summary = new TwoDimTable("GLM Model", "summary", new String[]{""}, names , types , formats,"");
+      glmModel._output._model_summary.set(0,0,glmModel._parms._family.toString());
+      glmModel._output._model_summary.set(0,1,glmModel._parms._link.toString());
+      String regularization = "None";
+      if(glmModel._parms._lambda != null && !(glmModel._parms._lambda.length == 1 &&  glmModel._parms._lambda[0] == 0)) { // have regularization
+        if(glmModel._parms._alpha[0] == 0)
+          regularization = "Ridge ( lambda = ";
+        else if(glmModel._parms._alpha[0] == 1)
+          regularization = "Lasso (lambda = ";
+        else
+          regularization = "Elastic Net (alpha = " + MathUtils.roundToNDigits(glmModel._parms._alpha[0],4)  +", lambda = ";
+        regularization = regularization + MathUtils.roundToNDigits(glmModel._parms._lambda[glmModel._output._best_lambda_idx],4) + " )";
+      }
+      glmModel._output._model_summary.set(0,2,regularization);
+      int lambdaSearch = 0;
+      if(glmModel._parms._lambda_search) {
+        lambdaSearch = 1;
+        glmModel._output._model_summary.set(0,3,"nlambda = " + glmModel._parms._nlambdas + ", lambda_max = " + MathUtils.roundToNDigits(glmModel._lambda_max,4)  + ", best_lambda_id = " + glmModel._output._best_lambda_idx);
+      }
+      int intercept = glmModel._parms._intercept?1:0;
+      glmModel._output._model_summary.set(0,3+lambdaSearch,Integer.toString(glmModel.beta().length - intercept));
+      glmModel._output._model_summary.set(0,4+lambdaSearch,Integer.toString(glmModel._output.rank() - intercept));
+      glmModel._output._model_summary.set(0,5+lambdaSearch,Integer.valueOf(_iter));
+      glmModel._output._model_summary.set(0,6+lambdaSearch,_trainFrame.toString());
+      if(_scoring_history != null)
+        glmModel._output._scoring_history = _scoring_history.to2dTable();
+      glmModel.update(_jobKey);
       glmModel.unlock(_jobKey);
     }
+  }
+
+  @Override protected double[] score0(double[] data, double[] preds) {
+    double eta = 0.0;
+    final double [] b = beta();
+    if(!_parms._use_all_factor_levels){ // good level 0 of all factors
+      for(int i = 0; i < _dinfo._catOffsets.length-1; ++i) if(data[i] != 0)
+        eta += b[_dinfo._catOffsets[i] + (int)(data[i]-1)];
+    } else { // do not good any levels!
+      for(int i = 0; i < _dinfo._catOffsets.length-1; ++i)
+        eta += b[_dinfo._catOffsets[i] + (int)data[i]];
+    }
+    final int noff = _dinfo.numStart() - _dinfo._cats;
+    for(int i = _dinfo._cats; i < data.length; ++i)
+      eta += b[noff+i]*data[i];
+    eta += b[b.length-1]; // reduce intercept
+    double mu = _parms.linkInv(eta);
+    preds[0] = mu;
+    if( _parms._family == Family.binomial ) { // threshold for prediction
+      if(Double.isNaN(mu)){
+        preds[0] = Double.NaN;
+        preds[1] = Double.NaN;
+        preds[2] = Double.NaN;
+      } else {
+        preds[0] = (mu >= _output._threshold ? 1 : 0);
+        preds[1] = 1.0 - mu; // class 0
+        preds[2] =       mu; // class 1
+      }
+    }
+    return preds;
+  }
+
+  @Override protected void toJavaPredictBody(SB body, SB classCtx, SB file) {
+    final int nclass = _output.nclasses();
+    String mname = JCodeGen.toJavaId(_key.toString());
+    JCodeGen.toStaticVar(classCtx,"BETA",beta(),"The Coefficients");
+    JCodeGen.toStaticVar(classCtx,"CATOFFS",_dinfo._catOffsets,"Categorical Offsets");
+    body.ip("double eta = 0.0;").nl();
+    body.ip("final double [] b = BETA;").nl();
+    if(!_parms._use_all_factor_levels){ // good level 0 of all factors
+      body.ip("for(int i = 0; i < CATOFFS.length-1; ++i) if(data[i] != 0)").nl();
+      body.ip("  eta += b[CATOFFS[i] + (int)(data[i]-1)];").nl();
+    } else { // do not good any levels!
+      body.ip("for(int i = 0; i < CATOFFS.length-1; ++i)").nl();
+      body.ip("  eta += b[CATOFFS[i] + (int)(data[i])];").nl();
+    }
+    final int noff = _dinfo.numStart() - _dinfo._cats;
+    body.ip("for(int i = ").p(_dinfo._cats).p("; i < data.length; ++i)").nl();
+    body.ip("  eta += b[").p(noff).p("+i]*data[i];").nl();
+    body.ip("eta += b[b.length-1]; // reduce intercept").nl();
+    body.ip("double mu = hex.genmodel.GenModel.GLM_").p(_parms._link.toString()).p("Inv(eta");
+//    if( _parms._link == hex.glm.GLMModel.GLMParameters.Link.tweedie ) body.p(",").p(_parms._tweedie_link_power);
+    body.p(");").nl();
+    body.ip("preds[0] = mu;").nl();
+    if( _parms._family == Family.binomial ) { // threshold for prediction
+      body.ip("preds[0] = mu > ").p(_output._threshold).p(" ? 1 : 0);").nl();
+      body.ip("preds[1] = 1.0 - mu; // class 0").nl();
+      body.ip("preds[2] =       mu; // class 1").nl();
+    }
+  }
+
+  @Override protected SB toJavaInit(SB sb, SB fileContext) {
+    sb.nl();
+    sb.ip("public boolean isSupervised() { return true; }").nl();
+    sb.ip("public int nfeatures() { return "+_output.nfeatures()+"; }").nl();
+    sb.ip("public int nclasses() { return "+_output.nclasses()+"; }").nl();
+    sb.ip("public ModelCategory getModelCategory() { return ModelCategory."+_output.getModelCategory()+"; }").nl();
+    return sb;
   }
 }

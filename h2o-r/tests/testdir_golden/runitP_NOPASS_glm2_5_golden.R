@@ -5,7 +5,7 @@ test.glm2ProstateAUC.golden <- function(H2Oserver) {
 	
     #Import data:
     Log.info("Importing Benign data...")
-    prostateH2O<- h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), key="cuseH2O")
+    prostateH2O<- h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), destination_frame="cuseH2O")
     prostateR<- read.csv(locate("smalldata/logreg/prostate.csv"), header=T)
     
  Log.info("Run matching models in R and H2O")
@@ -13,24 +13,24 @@ test.glm2ProstateAUC.golden <- function(H2Oserver) {
     fitR<- glm(CAPSULE ~ AGE + RACE + DPROS + DCAPS + PSA + VOL + GLEASON, family=binomial, data=prostateR)
      prostateR$predsR<- predict.glm(fitR, newdata=NULL, type="response")
      preds2R<- prediction(prostateR$predsR, labels=prostateR$CAPSULE)
-     auc<- performance(preds2R, measure="auc")
+     auc<- performance(preds2R, measure="AUC")
      aucR<- auc@y.values[[1]]
-     aucH<- fitH2O@model$auc
+     aucH<- fitH2O@model$training_metrics@metrics$AUC
 
          Log.info("Print model statistics for R and H2O... \n")
-    Log.info(paste("H2O Deviance  : ", fitH2O@model$residual_deviance,      "\t\t", "R Deviance   : ", fitR$deviance))
-    Log.info(paste("H2O Null Dev  : ", fitH2O@model$null_deviance, "\t\t", "R Null Dev   : ", fitR$null.deviance))
-    Log.info(paste("H2O residul df: ", fitH2O@model$residual_degrees_of_freedom,    "\t\t\t\t", "R residual df: ", fitR$df.residual))
-    Log.info(paste("H2O null df   : ", fitH2O@model$null_degrees_of_freedom,       "\t\t\t\t", "R null df    : ", fitR$df.null))
-    Log.info(paste("H2O aic       : ", fitH2O@model$aic,           "\t\t", "R aic        : ", fitR$aic))
-    Log.info(paste("H2O auc       : ", aucH,       "\t\t\t\t", "R auc    : ", aucR))
+    Log.info(paste("H2O Deviance  : ", fitH2O@model$training_metrics@metrics$residual_deviance,      "\t\t", "R Deviance   : ", fitR$deviance))
+    Log.info(paste("H2O Null Dev  : ", fitH2O@model$training_metrics@metrics$null_deviance, "\t\t", "R Null Dev   : ", fitR$null.deviance))
+    Log.info(paste("H2O residul df: ", fitH2O@model$training_metrics@metrics$residual_degrees_of_freedom,    "\t\t\t\t", "R residual df: ", fitR$df.residual))
+    Log.info(paste("H2O null df   : ", fitH2O@model$training_metrics@metrics$null_degrees_of_freedom,       "\t\t\t\t", "R null df    : ", fitR$df.null))
+    Log.info(paste("H2O AIC       : ", fitH2O@model$training_metrics@metrics$AIC,           "\t\t", "R AIC        : ", fitR$aic))
+    Log.info(paste("H2O AUC       : ", aucH,       "\t\t\t\t", "R AUC    : ", aucR))
 
     Log.info("Compare model statistics in R to model statistics in H2O")
-    expect_equal(fitH2O@model$null_deviance, fitR$null.deviance, tolerance = 0.01)
-    expect_equal(fitH2O@model$residual_deviance, fitR$deviance, tolerance = 0.01)
-    expect_equal(fitH2O@model$residual_degrees_of_freedom, fitR$df.residual, tolerance = 0.01)
-    expect_equal(fitH2O@model$null_degrees_of_freedom, fitR$df.null, tolerance = 0.01)
-    expect_equal(fitH2O@model$aic, fitR$aic, tolerance = 0.01)
+    expect_equal(fitH2O@model$training_metrics@metrics$null_deviance, fitR$null.deviance, tolerance = 0.01)
+    expect_equal(fitH2O@model$training_metrics@metrics$residual_deviance, fitR$deviance, tolerance = 0.01)
+    expect_equal(fitH2O@model$training_metrics@metrics$residual_degrees_of_freedom, fitR$df.residual, tolerance = 0.01)
+    expect_equal(fitH2O@model$training_metrics@metrics$null_degrees_of_freedom, fitR$df.null, tolerance = 0.01)
+    expect_equal(fitH2O@model$training_metrics@metrics$AIC, fitR$aic, tolerance = 0.01)
     expect_equal(aucR, aucH, tolerance=0.05)
     
     testEnd()

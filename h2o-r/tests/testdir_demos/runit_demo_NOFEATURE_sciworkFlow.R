@@ -1,6 +1,6 @@
 #Split data into test/train.
-#Do Grid search over lambda and Score all the models on a test set. Choose the best model by auc on the test set.
-#Do grid search on gbm and predict on test set. Print the aucs and model params "
+#Do Grid search over lambda and Score all the models on a test set. Choose the best model by AUC on the test set.
+#Do grid search on gbm and predict on test set. Print the AUCs and model params "
 
 setwd(normalizePath(dirname(R.utils::commandArgs(asValues=TRUE)$"f")))
 source('../h2o-runit.R')
@@ -8,7 +8,7 @@ source('../h2o-runit.R')
 
 test <- function(conn) {
 print("Reading in prostate dataset")
-pros.hex <- h2o.importFile(conn,normalizePath(locate("smalldata/logreg/prostate.csv")), key="pros.hex")
+pros.hex <- h2o.importFile(conn,normalizePath(locate("smalldata/logreg/prostate.csv")), destination_frame="pros.hex")
 print ("Run summary")
 summary(pros.hex)
 print("Summary of a column")
@@ -44,10 +44,10 @@ print("predict on best lambda model")
 pred <- predict(my.glm@models[[best_model]],pros.test)
 print(head(pred))
 
-print("print performance and auc")
+print("print performance and AUC")
 perf <- h2o.performance(pred$'1',pros.test$CAPSULE )
 print(perf)
-print(perf@model$auc)
+print(perf@model$AUC)
 plot(perf,type="roc")
 
 result_frame <- data.frame(id = 0,auc = 0 , key = 0)
@@ -56,17 +56,17 @@ print("print performance for all models on test set")
 for(i in 1:100){
   pred <- predict(my.glm@models[[i]],pros.test)
   perf <- h2o.performance(pred$'1',pros.test$CAPSULE )
-  print ( paste ("  model number:", i, "  auc on test set: ", round(perf@model$auc, digits=4),  sep=''), quote=F)
-  result_frame <- rbind(result_frame, c(i,round(perf@model$auc, digits=4),my.glm@models[[i]]@key))
+  print ( paste ("  model number:", i, "  AUC on test set: ", round(perf@model$AUC, digits=4),  sep=''), quote=F)
+  result_frame <- rbind(result_frame, c(i,round(perf@model$AUC, digits=4),my.glm@models[[i]]@key))
 }
 
 result_frame <- result_frame[-1,]
 result_frame
-print("order the results by auc on test set")
-ordered_results <- result_frame[order(result_frame$auc,decreasing=T),]
+print("order the results by AUC on test set")
+ordered_results <- result_frame[order(result_frame$AUC,decreasing=T),]
 ordered_results
-print("get the model that gives the best prediction using the auc score")
-glm_best_model <- h2o.getModel(conn,key = ordered_results[1,"key"])
+print("get the model that gives the best prediction using the AUC score")
+glm_best_model <- h2o.getModel(conn,model_id= ordered_results[1,"key"])
 print(glm_best_model)
 
 #GBM
@@ -92,7 +92,7 @@ for ( i in 1:num_models ) {
                   " shrinkage:", pros.gbm@sumtable[[i]]$shrinkage,
                   " min row: ", pros.gbm@sumtable[[i]]$n.minobsinnode, 
                   " bins:", pros.gbm@sumtable[[i]]$nbins,
-                  " auc:", round(perf@model$auc, digits=4), sep=''), quote=F)
+                  " AUC:", round(perf@model$AUC, digits=4), sep=''), quote=F)
 }
 
 print(" Performance measure on a test set ")
@@ -104,4 +104,4 @@ print(perf)
 testEnd()
 }
 
-doTest("Split data into test/train, do Grid search over lambda and Score all the models on a test set and choose the best model by auc on the test set. Do grid search on gbm and predict on test set, print the aucs and model params ", test)
+doTest("Split data into test/train, do Grid search over lambda and Score all the models on a test set and choose the best model by AUC on the test set. Do grid search on gbm and predict on test set, print the AUCs and model params ", test)

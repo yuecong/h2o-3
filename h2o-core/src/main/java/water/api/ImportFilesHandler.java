@@ -14,7 +14,7 @@ import java.util.ArrayList;
 public class ImportFilesHandler extends Handler {
 
   @SuppressWarnings("unused") // called through reflection by RequestServer
-  public ImportFilesV2 importFiles(int version, ImportFilesV2 importFiles) {
+  public ImportFilesV3 importFiles(int version, ImportFilesV3 importFiles) {
     ArrayList<String> files = new ArrayList();
     ArrayList<String> keys = new ArrayList();
     ArrayList<String> fails = new ArrayList();
@@ -23,7 +23,7 @@ public class ImportFilesHandler extends Handler {
     H2O.getPM().importFiles(importFiles.path, files, keys, fails, dels);
 
     importFiles.files = files.toArray(new String[files.size()]);
-    importFiles.keys = keys.toArray(new String[keys.size()]);
+    importFiles.destination_frames = keys.toArray(new String[keys.size()]);
     importFiles.fails = fails.toArray(new String[fails.size()]);
     importFiles.dels = dels.toArray(new String[dels.size()]);
     return importFiles;

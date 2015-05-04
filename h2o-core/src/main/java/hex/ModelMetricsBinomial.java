@@ -30,7 +30,7 @@ public class ModelMetricsBinomial extends ModelMetricsSupervised {
 
 
   public static class MetricBuilderBinomial<T extends MetricBuilderBinomial<T>> extends MetricBuilderSupervised<T> {
-    double _logloss;
+    protected double _logloss;
     protected AUC2.AUCBuilder _auc;
     public MetricBuilderBinomial( String[] domain ) { super(2,domain); _auc = new AUC2.AUCBuilder(AUC2.NBINS); }
 
@@ -49,10 +49,15 @@ public class ModelMetricsBinomial extends ModelMetricsSupervised {
 
       // Compute log loss
       final double eps = 1e-15;
+<<<<<<< HEAD
       _logloss += -row_weight*Math.log(Math.max(eps,ds[iact+1]));
 
       for (int i=0; i<row_weight; ++i) //FIXME - pass row_weight to AUC2.perRow()
         _auc.perRow(ds[2],iact, 1.0f);
+=======
+      _logloss += -Math.log(Math.max(eps,ds[iact+1]));
+      _auc.perRow(ds[2],iact);
+>>>>>>> arno_jenkins
 
       return ds;                // Flow coding
     }

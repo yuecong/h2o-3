@@ -35,23 +35,6 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
   public final Frame valid() { return _valid; }
   protected transient Frame _valid;
 
-  public boolean canHaveRowWeights() { return true; }
-  protected transient boolean _have_dummy_weights;
-  protected transient String _row_weights_name;
-  protected transient Vec _row_weights; // training row weights column
-  protected Key _row_weights_key; // training row weights key
-  public final Vec rowWeights() { return _row_weights == null ? (_row_weights = DKV.getGet(_row_weights_key)) : _row_weights; }
-
-  protected transient Vec _vrow_weights; // validation row weights column
-  protected Key _vrow_weights_key; // validation row weights key
-  public final Vec vrowWeights() { return _vrow_weights == null ? (_vrow_weights = DKV.getGet(_vrow_weights_key)) : _vrow_weights; }
-
-  public Frame addRowWeights(Frame fr, Vec weights) {
-    Frame tra_fr = new Frame(fr._key, fr.names(), fr.vecs());
-    tra_fr.add(_row_weights_name, weights);
-    return tra_fr;
-  }
-
   // TODO: tighten up the type
   // Map the algo name (e.g., "deeplearning") to the builder class (e.g., DeepLearning.class) :
   private static final Map<String, Class<? extends ModelBuilder>> _builders = new HashMap<>();
@@ -134,7 +117,7 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
 
   /** Constructor making a default destination key */
   public ModelBuilder(String desc, P parms) {
-    this((parms==null || parms._destination_key== null) ? Key.make(desc + "Model_" + Key.rand()) : parms._destination_key, desc,parms);
+    this((parms == null || parms._model_id == null) ? Key.make(desc + "Model_" + Key.rand()) : parms._model_id, desc, parms);
   }
 
   /** Default constructor, given all arguments */
@@ -147,8 +130,17 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
   public static ModelBuilder createModelBuilder(String algo) {
     ModelBuilder modelBuilder;
 
+    Class<? extends ModelBuilder> clz = null;
     try {
-      Class<? extends ModelBuilder> clz = ModelBuilder.getModelBuilder(algo);
+      clz = ModelBuilder.getModelBuilder(algo);
+    }
+    catch (Exception ignore) {}
+
+    if (clz == null) {
+      throw new H2OIllegalArgumentException("algo", "createModelBuilder", "Algo not known (" + algo + ")");
+    }
+
+    try {
       if (! (clz.getGenericSuperclass() instanceof ParameterizedType)) {
         throw H2O.fail("Class is not parameterized as expected: " + clz);
       }
@@ -175,11 +167,34 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
    *  build.  Each ModelBuilder must have one of these. */
   abstract public Model.ModelCategory[] can_build();
 
+  /**
+   * Visibility for this algo: is it always visible, is it beta (always visible but with a note in the UI)
+   * or is it experimental (hidden by default, visible in the UI if the user gives an "experimental" flag
+   * at startup).
+   */
+  public enum BuilderVisibility {
+    Experimental,
+    Beta,
+    Stable
+  }
+
+  /**
+   * Visibility for this algo: is it always visible, is it beta (always visible but with a note in the UI)
+   * or is it experimental (hidden by default, visible in the UI if the user gives an "experimental" flag
+   * at startup).
+   */
+  abstract public BuilderVisibility builderVisibility();
+
   /** Clear whatever was done by init() so it can be run again. */
   public void clearInitState() {
     clearValidationErrors();
 
   }
+
+  /**
+   * Override this method to call error() if the model is expected to not fit in memory, and say why
+   */
+  protected void checkMemoryFootPrint() {}
 
   // ==========================================================================
   /** Initialize the ModelBuilder, validating all arguments and preparing the
@@ -228,7 +243,7 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
       }.doIt(_train,"Dropping constant columns: ",expensive);
 
     // Drop cols with >20% NAs
-    if( _parms._dropNA20Cols )
+    if( _parms._drop_na20_cols )
       new FilterCols() { 
         @Override protected boolean filter(Vec v) { return ((float)v.naCnt() / v.length()) > 0.2; }
       }.doIt(_train,"Dropping columns with too many missing values: ",expensive);
@@ -237,11 +252,12 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
     // can use them, and otherwise all algos will then be forced to remove
     // them.  Text algos (grep, word2vec) take raw text columns - which are
     // numeric (arrays of bytes).
-    new FilterCols() {
+    new FilterCols() { 
       @Override protected boolean filter(Vec v) { return v.isString() || v.isUUID(); }
     }.doIt(_train,"Dropping String and UUID columns: ",expensive);
 
     // Check that at least some columns are not-constant and not-all-NAs
+<<<<<<< HEAD
     if (_train.numCols() == 0)
       error("_train","There are no usable columns to generate a model");
 
@@ -279,6 +295,10 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
         _vrow_weights_key = _vrow_weights._key;
       }
     }
+=======
+    if( _train.numCols() == 0 )
+      error("_train","There are no usable columns to generate model");
+>>>>>>> arno_jenkins
 
     // Build the validation set to be compatible with the training set.
     // Toss out extra columns, complain about missing ones, remap enums
@@ -286,7 +306,7 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
     if (va != null)
       _valid = new Frame(null /* not putting this into KV */, va._names.clone(), va.vecs().clone());
     try {
-      String[] msgs = Model.adaptTestForTrain(_train._names,_train.domains(),_valid,_parms.missingColumnsType(),expensive);
+      String[] msgs = Model.adaptTestForTrain(_train._names,null,_train.domains(),_valid,_parms.missingColumnsType(),expensive);
       if( expensive ) {
         for( String s : msgs ) {
           Log.info(s);
@@ -298,20 +318,13 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
     }
     assert !expensive || (_valid == null || Arrays.equals(_train._names,_valid._names));
   }
-  @Override public void cleanup() {
-    super.cleanup();
-    if (_have_dummy_weights) {
-      if (rowWeights() != null) rowWeights().remove();
-      if (_vrow_weights_key != null && vrowWeights() != null) vrowWeights().remove();
-    }
-  }
 
   abstract class FilterCols {
     abstract protected boolean filter(Vec v);
     void doIt( Frame f, String msg, boolean expensive ) {
       boolean any=false;
       for( int i = 0; i < f.vecs().length; i++ ) {
-        if( filter(f.vecs()[i]) && f._names[i] != _row_weights_name) {
+        if( filter(f.vecs()[i]) ) {
           if( any ) msg += ", "; // Log dropped cols
           any = true;
           msg += f._names[i];

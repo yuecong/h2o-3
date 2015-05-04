@@ -6,6 +6,7 @@ import water.IcedWrapper;
 import water.Weaver;
 import water.api.SchemaMetadataBase.FieldMetadataBase;
 import water.exceptions.H2OIllegalArgumentException;
+import water.util.IcedHashMap;
 import water.util.Log;
 import water.util.ReflectionUtils;
 
@@ -242,8 +243,15 @@ public final class SchemaMetadata extends Iced {
       if (is_array)
         return consType(schema, clz.getComponentType(), field_name) + "[]";
 
-      if (Map.class.isAssignableFrom(clz))
-        return "Map";
+      if (Map.class.isAssignableFrom(clz)) {
+        if (IcedHashMap.class == clz.getSuperclass()) {
+          return "Map<" + ReflectionUtils.findActualClassParameter(clz, 0).getSimpleName() + "," + ReflectionUtils.findActualClassParameter(clz, 1).getSimpleName() + ">";
+        } else {
+          Log.warn("Schema Map field isn't a subclass of IcedHashMap, so its metadata won't have type parameters: " + schema.getClass().getSimpleName() + "." + field_name);
+          return "Map";
+        }
+      }
+
 
       if (List.class.isAssignableFrom(clz))
         return "List";
@@ -257,8 +265,8 @@ public final class SchemaMetadata extends Iced {
         return "Key";
       }
 
-      if (KeyV1.class.isAssignableFrom(clz)) {
-        return "Key<" + KeyV1.getKeyedClassType((Class<? extends KeyV1>)clz) + ">";
+      if (KeyV3.class.isAssignableFrom(clz)) {
+        return "Key<" + KeyV3.getKeyedClassType((Class<? extends KeyV3>) clz) + ">";
       }
 
       if (Schema.class.isAssignableFrom(clz)) {
@@ -271,13 +279,13 @@ public final class SchemaMetadata extends Iced {
           return "Schema.Meta";
         } else {
           // Special cases: polymorphic metadata fields that can contain scalars, Schemas (any Iced, actually), or arrays of these:
-          if (schema instanceof ModelParameterSchemaV2 && ("default_value".equals(field_name) || "actual_value".equals(field_name)))
+          if (schema instanceof ModelParameterSchemaV3 && ("default_value".equals(field_name) || "actual_value".equals(field_name)))
             return "Polymorphic";
 
-          if ((schema instanceof FieldMetadataV1 || schema instanceof FieldMetadataBase) && "value".equals(field_name))
+          if ((schema instanceof FieldMetadataV3 || schema instanceof FieldMetadataBase) && "value".equals(field_name))
             return "Polymorphic";
 
-          if ((schema instanceof TwoDimTableV1 && "data".equals(field_name))) // IcedWrapper
+          if (((schema instanceof TwoDimTableBase || schema instanceof TwoDimTableV3) && "data".equals(field_name))) // IcedWrapper
             return "Polymorphic";
 
           Log.warn("WARNING: found non-Schema Iced field: " + clz.toString() + " in Schema: " + schema.getClass() + " field: " + field_name);

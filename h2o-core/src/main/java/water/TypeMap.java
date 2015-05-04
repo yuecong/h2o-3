@@ -1,5 +1,9 @@
 package water;
 
+import water.api.CloudV3;
+import water.api.H2OErrorV3;
+import water.api.TutorialsV3;
+import water.api.TypeaheadV3;
 import water.nbhm.NonBlockingHashMap;
 import water.util.Log;
 
@@ -28,16 +32,30 @@ public class TypeMap {
     water.fvec.Vec.VectorGroup.class.getName(), // Used in TestUtil
 
     // Status pages looked at without locking the cloud
-    water.api.CloudV1.class.getName(),
-    water.api.CloudV1.NodeV1.class.getName(),
+    CloudV3.class.getName(),
+    CloudV3.NodeV1.class.getName(),
     water.H2OError.class.getName(),
-    water.api.H2OErrorV1.class.getName(),
+    H2OErrorV3.class.getName(),
     water.util.IcedHashMap.class.getName(),
+    water.util.IcedSortedHashMap.class.getName(),
+    water.util.IcedHashMapBase.class.getName(),
+    water.util.IcedHashMap.IcedHashMapStringString.class.getName(),
+    water.util.IcedHashMap.IcedHashMapStringObject.class.getName(),
+    hex.schemas.ModelBuilderSchema.IcedHashMapStringModelBuilderSchema.class.getName(),
     water.api.Schema.class.getName(),
     water.api.Schema.Meta.class.getName(),
-    water.api.TutorialsV1.class.getName(),
-    water.api.TypeaheadV2.class.getName(),    // Allow typeahead without locking
+    TutorialsV3.class.getName(),
+    TypeaheadV3.class.getName(),    // Allow typeahead without locking
     water.Key.class.getName(),
+
+    water.api.AboutHandler.AboutV3.class.getName(),
+    water.api.AboutHandler.AboutEntryV3.class.getName(),
+    water.api.NodePersistentStorageV3.class.getName(),
+    water.api.NodePersistentStorageV3.NodePersistentStorageEntryV3.class.getName(),
+    water.api.DocsV3.class.getName(),
+    water.api.DocsBase.class.getName(),
+    water.api.RouteV3.class.getName(),
+    water.api.RouteBase.class.getName(),
   };
   // Class name -> ID mapping
   static private final NonBlockingHashMap<String, Integer> MAP = new NonBlockingHashMap<>();
@@ -98,9 +116,10 @@ public class TypeMap {
     if( I != null ) return I;
     // Need to install a new cloud-wide type ID for className.
     assert H2O.CLOUD.size() > 0 : "No cloud when getting type id for "+className;
-    int id = -1;
-    if( H2O.CLOUD.leader() != H2O.SELF ) // Not leader?
-      id = FetchId.fetchId(className);
+    // Am I leader, or not?  Lock the cloud to find out
+    Paxos.lockCloud(className);
+    // Leader: pick an ID.  Not-the-Leader: fetch ID from leader.
+    int id = H2O.CLOUD.leader() == H2O.SELF ? -1 : FetchId.fetchId(className);
     return install(className,id);
   }
 
@@ -121,8 +140,9 @@ public class TypeMap {
       if( s != null ) return s; // Has the className already
     }
     assert H2O.CLOUD.leader() != H2O.SELF : "Leader has no mapping for id "+id; // Leaders always have the latest mapping already
-    String s = FetchClazz.fetchClazz(id);  // Fetch class name string from leader
-    install( s, id );                      // Install name<->id mapping
+    String s = FetchClazz.fetchClazz(id); // Fetch class name string from leader
+    Paxos.lockCloud(s); // If the leader is already selected, then the cloud is already locked but maybe we dont know; lock now
+    install( s, id );                     // Install name<->id mapping
     return s;
   }
 
@@ -132,8 +152,8 @@ public class TypeMap {
   // smaller type ids, and these will work fine in either old or new arrays.
   synchronized static private int install( String className, int id ) {
     assert !_check_no_locking : "Locking cloud to assign typeid to "+className;
-    Paxos.lockCloud();
     if( id == -1 ) {            // Leader requesting a new ID
+      assert H2O.CLOUD.leader() == H2O.SELF; // Only leaders get to pick new IDs
       Integer i = MAP.get(className);
       if( i != null ) return i; // Check again under lock for already having an ID
       id = IDS++;               // Leader gets an ID under lock

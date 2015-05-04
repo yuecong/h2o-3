@@ -5,8 +5,8 @@ import hex.ModelBuilder;
 import hex.ModelBuilder.ValidationMessage;
 import hex.ModelBuilder.ValidationMessage.MessageType;
 import water.*;
-import water.api.KeyV1.FrameKeyV1;
-import water.api.KeyV1.ModelKeyV1;
+import water.api.KeyV3.FrameKeyV3;
+import water.api.KeyV3.ModelKeyV3;
 import water.fvec.Frame;
 import water.util.Log;
 import water.util.PojoUtils;
@@ -24,7 +24,11 @@ public class ModelParametersSchema<P extends Model.Parameters, S extends ModelPa
   // NOTE:
   // Parameters must be ordered for the UI
   ////////////////////////////////////////
+<<<<<<< HEAD
   static public String[] own_fields = new String[] { "destination_key", "training_frame", "validation_frame", "row_weights_column", "ignored_columns", "dropNA20Cols" };
+=======
+  static public String[] own_fields = new String[] { "model_id", "training_frame", "validation_frame", "ignored_columns", "drop_na20_cols", "score_each_iteration" };
+>>>>>>> arno_jenkins
 
   /** List of fields in the order in which we want them serialized.  This is the order they will be presented in the UI.  */
   private transient String[] __fields_cache = null;
@@ -58,14 +62,14 @@ public class ModelParametersSchema<P extends Model.Parameters, S extends ModelPa
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   // Parameters common to all models:
-  @API(help="Destination key for this model; auto-generated if not specified", required = false, direction=API.Direction.INOUT)
-  public ModelKeyV1 destination_key;
+  @API(help="Destination id for this model; auto-generated if not specified", required = false, direction=API.Direction.INOUT)
+  public ModelKeyV3 model_id;
 
   @API(help="Training frame", direction=API.Direction.INOUT /* Not required, to allow initial params validation: , required=true */)
-  public FrameKeyV1 training_frame;
+  public FrameKeyV3 training_frame;
 
   @API(help="Validation frame", direction=API.Direction.INOUT)
-  public FrameKeyV1 validation_frame;
+  public FrameKeyV3 validation_frame;
 
   @API(help = "Row weights column", is_member_of_frames = {"training_frame", "validation_frame"}, is_mutually_exclusive_with = {"ignored_columns"}, direction = API.Direction.INOUT)
   public FrameV2.ColSpecifierV2 row_weights_column;
@@ -74,7 +78,10 @@ public class ModelParametersSchema<P extends Model.Parameters, S extends ModelPa
   public String[] ignored_columns;         // column names to ignore for training
 
   @API(help="Drop columns with more than 20% missing values", direction=API.Direction.INOUT)
-  public boolean dropNA20Cols; // Drop columns with more than 20% missing values
+  public boolean drop_na20_cols; // Drop columns with more than 20% missing values
+
+  @API(help="Whether to score during each iteration of model training", direction=API.Direction.INOUT)
+  public boolean score_each_iteration;
 
   protected static String[] append_field_arrays(String[] first, String[] second) {
     String[] appended = new String[first.length + second.length];
@@ -89,14 +96,14 @@ public class ModelParametersSchema<P extends Model.Parameters, S extends ModelPa
     if (null != impl._train) {
       Value v = DKV.get(impl._train);
       if (null != v) {
-        training_frame = new FrameKeyV1(((Frame) v.get())._key);
+        training_frame = new FrameKeyV3(((Frame) v.get())._key);
       }
     }
 
     if (null != impl._valid) {
       Value v = DKV.get(impl._valid);
       if (null != v) {
-        validation_frame = new FrameKeyV1(((Frame) v.get())._key);
+        validation_frame = new FrameKeyV3(((Frame) v.get())._key);
       }
     }
 
@@ -139,13 +146,13 @@ public class ModelParametersSchema<P extends Model.Parameters, S extends ModelPa
 
   public static final class ValidationMessageV2 extends ValidationMessageBase<ModelBuilder.ValidationMessage, ValidationMessageV2> {  }
 
-  private static void compute_transitive_closure_of_is_mutually_exclusive(ModelParameterSchemaV2[] metadata) {
+  private static void compute_transitive_closure_of_is_mutually_exclusive(ModelParameterSchemaV3[] metadata) {
     // Form the transitive closure of the is_mutually_exclusive field lists by visiting
     // all fields and collecting the fields in a Map of Sets.  Then pass over them a second
     // time setting the full lists.
     Map<String, Set<String>> field_exclusivity_groups = new HashMap<>();
     for (int i = 0; i < metadata.length; i++) {
-      ModelParameterSchemaV2 param = metadata[i];
+      ModelParameterSchemaV3 param = metadata[i];
       String name = param.name;
 
       // Turn param.is_mutually_exclusive_with into a List which we will walk over twice
@@ -173,7 +180,7 @@ public class ModelParametersSchema<P extends Model.Parameters, S extends ModelPa
 
     // Now walk over all the fields and create new comprehensive is_mutually_exclusive arrays, not containing self.
     for (int i = 0; i < metadata.length; i++) {
-      ModelParameterSchemaV2 param = metadata[i];
+      ModelParameterSchemaV3 param = metadata[i];
       String name = param.name;
       Set<String> me = field_exclusivity_groups.get(name);
       Set<String> not_me = new HashSet(me);
@@ -190,7 +197,7 @@ public class ModelParametersSchema<P extends Model.Parameters, S extends ModelPa
     String[] fields = parameters.fields();
 
     // Build ModelParameterSchemaV2 objects for each field, and the call writeJSON on the array
-    ModelParameterSchemaV2[] metadata = new ModelParameterSchemaV2[fields.length];
+    ModelParameterSchemaV3[] metadata = new ModelParameterSchemaV3[fields.length];
 
     String field_name = null;
     try {
@@ -199,7 +206,7 @@ public class ModelParametersSchema<P extends Model.Parameters, S extends ModelPa
         Field f = parameters.getClass().getField(field_name);
 
         // TODO: cache a default parameters schema
-        ModelParameterSchemaV2 schema = new ModelParameterSchemaV2(parameters, default_parameters, f);
+        ModelParameterSchemaV3 schema = new ModelParameterSchemaV3(parameters, default_parameters, f);
         metadata[i] = schema;
       }
     } catch (NoSuchFieldException e) {

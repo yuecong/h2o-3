@@ -9,7 +9,7 @@ test.DRF.smallcat <- function(conn) {
 
   Log.info("Importing alphabet_cattest.csv data...\n")
   alphabet.hex <- h2o.uploadFile(conn,
-    locate("smalldata/gbm_test/alphabet_cattest.csv"), key = "alphabet.hex")
+    locate("smalldata/gbm_test/alphabet_cattest.csv"), destination_frame = "alphabet.hex")
   alphabet.hex$y <- as.factor(alphabet.hex$y)
   Log.info("Summary of alphabet_cattest.csv from H2O:\n")
   print(summary(alphabet.hex))
@@ -49,7 +49,7 @@ test.DRF.smallcat <- function(conn) {
   # actual <- ifelse(alphabet.data$y == "0", 0, 1)
   # pred <- ifelse(drfmodel.r.pred == "0", 0, 1)
   # R.auc = gbm.roc.area(actual, pred)
-  # Log.info(paste("R AUC:", R.auc, "\tH2O (Group Split) AUC:", drfmodel.grpsplit@model$auc))
+  # Log.info(paste("R AUC:", R.auc, "\tH2O (Group Split) AUC:", drfmodel.grpsplit@model$AUC))
   testEnd()
 }
 

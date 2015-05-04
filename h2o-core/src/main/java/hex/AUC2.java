@@ -37,47 +37,42 @@ public class AUC2 extends Iced {
   public enum ThresholdCriterion {
     f1(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
         final double prec = precision.exec(tp,fp,fn,tn);
-        final double recl = recall   .exec(tp,fp,fn,tn);
+        final double recl = tpr   .exec(tp,fp,fn,tn);
         return 2. * (prec * recl) / (prec + recl);
       } },
     f2(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
         final double prec = precision.exec(tp,fp,fn,tn);
-        final double recl = recall   .exec(tp,fp,fn,tn);
+        final double recl = tpr   .exec(tp,fp,fn,tn);
         return 5. * (prec * recl) / (4. * prec + recl);
       } },
     f0point5(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
         final double prec = precision.exec(tp,fp,fn,tn);
-        final double recl = recall   .exec(tp,fp,fn,tn);
+        final double recl = tpr   .exec(tp,fp,fn,tn);
         return 1.25 * (prec * recl) / (.25 * prec + recl);
       } },
-    accuracy(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
-        return 1.0-((double)fn+fp)/(tp+fn+tn+fp);
-      } },
-    precision(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
-        return (double)tp/(tp+fp);
-      } },
-    recall(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
-        return (double)tp/(tp+fn);
-      } },
-    specificity(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
-        return (double)tn/(tn+fp);
-      } },
+    accuracy(false) { @Override double exec( long tp, long fp, long fn, long tn ) { return 1.0-((double)fn+fp)/(tp+fn+tn+fp); } },
+    precision(false) { @Override double exec( long tp, long fp, long fn, long tn ) { return (double)tp/(tp+fp); } },
     absolute_MCC(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
-        double mcc = (tp*tn - fp*fn)/Math.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn));
+        double mcc = ((double)tp*tn - (double)fp*fn);
+        if (mcc == 0) return 0;
+        mcc /= Math.sqrt(((double)tp+fp)*((double)tp+fn)*((double)tn+fp)*((double)tn+fn));
+        assert(Math.abs(mcc)<=1.) : tp + " " + fp + " " + fn + " " + tn;
         return Math.abs(mcc);
       } },
-    // minimize max-per-class-error by maximizing min-per-class-correct.
+    // minimize max-per-class-error by maximizing min-per-class-accuracy.
     // Report from max_criterion is the smallest correct rate for both classes.
     // The max min-error-rate is 1.0 minus that.
-    minPerClassCorrect(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
+    min_per_class_accuracy(false) { @Override double exec( long tp, long fp, long fn, long tn ) {
         return Math.min((double)tp/(tp+fn),(double)tn/(tn+fp));
       } },
-    tps(true) { @Override double exec( long tp, long fp, long fn, long tn ) {
-        return tp;
-      } },
-    fps(true) { @Override double exec( long tp, long fp, long fn, long tn ) {
-        return fp;
-      } },
+    tns(true) { @Override double exec( long tp, long fp, long fn, long tn ) { return tn; } },
+    fns(true) { @Override double exec( long tp, long fp, long fn, long tn ) { return fn; } },
+    fps(true) { @Override double exec( long tp, long fp, long fn, long tn ) { return fp; } },
+    tps(true) { @Override double exec( long tp, long fp, long fn, long tn ) { return tp; } },
+    tnr(false) { @Override double exec( long tp, long fp, long fn, long tn ) { return (double)tn/(fp+tn); } },
+    fnr(false) { @Override double exec( long tp, long fp, long fn, long tn ) { return (double)fn/(fn+tp); } },
+    fpr(false) { @Override double exec( long tp, long fp, long fn, long tn ) { return (double)fp/(fp+tn); } },
+    tpr(false) { @Override double exec( long tp, long fp, long fn, long tn ) { return (double)tp/(tp+fn); } },
     ;
     public final boolean _isInt; // Integral-Valued data vs Real-Valued
     ThresholdCriterion(boolean isInt) { _isInt = isInt; }
@@ -236,7 +231,7 @@ public class AUC2 extends Iced {
       else         { _tps[idx]=row_weight; _fps[idx]=0; }
       _n++;
       if( _n > _nBins )         // Merge as needed back down to nBins
-        mergeOneBin();
+        mergeOneBin(true);
     }
 
     public void reduce( AUCBuilder bldr ) {
@@ -262,9 +257,7 @@ public class AUC2 extends Iced {
 
       // Merge elements with least squared-error increase until we get fewer
       // than _nBins and no duplicates.
-      boolean dups = true;
-      while( (dups && _n > 1) || _n > _nBins )
-        dups = mergeOneBin();
+      while( mergeOneBin(_n > _nBins) ) ;
     }
 
 //    private boolean sorted() {
@@ -277,10 +270,12 @@ public class AUC2 extends Iced {
 //      return true;
 //    }
 
-    private boolean mergeOneBin() {
+    private boolean mergeOneBin( boolean merge ) {
+      // Search for the bins with the smallest increase in error to merge, or
+      // zero delta.  Returns -1 if no dups and not 'merge'.  Never returns -1
+      // if 'merge' is true, always reports valid index to merge at.
       // Too many bins; must merge bins.  Merge into bins with least total
       // squared error.  Horrible slowness linear scan.  
-      boolean dups = false;
       double minSQE = Double.MAX_VALUE;
       int minI = -1;
       for( int i=0; i<_n-1; i++ ) {
@@ -288,11 +283,12 @@ public class AUC2 extends Iced {
         double k1 = _tps[i+1]+_fps[i+1];
         double delta = _ths[i+1]-_ths[i];
         double sqe0 = _sqe[i]+_sqe[i+1]+delta*delta*k0*k1 / (k0+k1);
-        if( sqe0 < minSQE || delta==0 ) {  
-          minI = i;  minSQE = sqe0; 
-          if( delta==0 ) { dups = true; break; }
+        if( sqe0 < minSQE || delta==0 ) {
+          minI = i;  minSQE = sqe0;
+          if( delta == 0 ) { merge = true; break; } // Must merge dup/equal thresholds, stop searching and do merge
         }
       }
+      if( !merge ) return false; // if 'merge' is false, then no merge
 
       // Here is code for merging bins with keeping the bins balanced in
       // size, but this leads to bad errors if the probabilities are sorted.
@@ -325,7 +321,7 @@ public class AUC2 extends Iced {
       System.arraycopy(_tps,minI+2,_tps,minI+1,_n-minI-2);
       System.arraycopy(_fps,minI+2,_fps,minI+1,_n-minI-2);
       _n--;
-      return dups;
+      return true;
     }
   }
 }

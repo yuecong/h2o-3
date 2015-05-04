@@ -4,8 +4,8 @@ source('../h2o-runit.R')
 test.logloss <- function(H2Oserver) {
   Log.info("Testing binomial logloss")
 
-  train = h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), key="train")
-  test = h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), key="test")
+  train = h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), destination_frame="train")
+  test = h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), destination_frame="test")
 
   ## Compute LogLoss explicitly from predictions on the test set
   LogLoss <- function(act, pred) {
@@ -22,7 +22,7 @@ test.logloss <- function(H2Oserver) {
   predictors = 3:9
   response = 2
   train[,response] <- as.factor(train[,response])
-  model = h2o.gbm(x=predictors,y=response,loss = "bernoulli",training_frame=train,
+  model = h2o.gbm(x=predictors,y=response,distribution = "bernoulli",training_frame=train,
                   ntrees=2,max_depth=3,min_rows=1,learn_rate=0.01,nbins=20)
 
   ## Get LogLoss from the model on training set
@@ -32,7 +32,7 @@ test.logloss <- function(H2Oserver) {
   ll2 <- h2o.performance(model, test)@metrics$logloss
 
 
-  test3 = h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), key="test3")
+  test3 = h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), destination_frame="test3")
   actual <- as.numeric(test3[,response])
   pred <- predict(model,test3)
 
@@ -51,7 +51,7 @@ test.logloss <- function(H2Oserver) {
   predictors = c(2:3,5:9)
   response = 4
   train[,response] <- as.factor(train[,response])
-  model = h2o.gbm(x=predictors,y=response,loss = "multinomial",training_frame=train,
+  model = h2o.gbm(x=predictors,y=response,distribution = "multinomial",training_frame=train,
                   ntrees=2,max_depth=3,min_rows=1,learn_rate=0.01,nbins=20)
 
   ## Get LogLoss from the model on training set
@@ -61,7 +61,7 @@ test.logloss <- function(H2Oserver) {
   ll2 <- h2o.performance(model, test)@metrics$logloss
 
 
-  test3 = h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), key="test3")
+  test3 = h2o.uploadFile(H2Oserver, locate("smalldata/logreg/prostate.csv"), destination_frame="test3")
   actual <- as.numeric(test3[,response])
   pred <- predict(model,test3)
 

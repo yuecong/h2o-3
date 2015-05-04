@@ -172,7 +172,7 @@ class H2O(object):
 
     def do_json_request(self, jsonRequest=None, fullUrl=None, timeout=10, params=None, postData=None, returnFast=False,
         cmd='get', extraComment=None, ignoreH2oError=False, noExtraErrorCheck=False, **kwargs):
-        # if url param is used, use it as full url. otherwise crate from the jsonRequest
+        # if url param is used, use it as full url. otherwise create from the jsonRequest
         if fullUrl:
             url = fullUrl
         else:
@@ -189,7 +189,7 @@ class H2O(object):
         else:
             paramsStr = ''
 
-        extraComment2 = " " + repr(postData)+";" if cmd=='post' else ""
+        extraComment2 = " " + str(postData)+";" if cmd=='post' else ""
         extraComment2 += extraComment if extraComment else ""
 
         if len(extraComment2) > 0:
@@ -467,14 +467,16 @@ class H2O(object):
                     '-hdfs_config ' + self.hdfs_config
                 ]
 
-        if self.use_hdfs:
+        # UPDATE: no longer valid to h2o?
+        if 1==0 and self.use_hdfs:
             args += [
                 # it's fine if hdfs_name has a ":9000" port or something too
                 '-hdfs hdfs://' + self.hdfs_name_node,
                 '-hdfs_version ' + self.hdfs_version,
             ]
 
-        if self.use_maprfs:
+        # UPDATE: no longer valid to h2o?
+        if 1==0 and self.use_maprfs:
             args += [
                 # 3 slashes?
                 '-hdfs maprfs:///' + self.hdfs_name_node,

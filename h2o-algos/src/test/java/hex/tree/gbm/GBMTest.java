@@ -3,8 +3,7 @@ package hex.tree.gbm;
 import hex.tree.gbm.GBMModel.GBMParameters.Family;
 import org.junit.*;
 import water.*;
-import water.fvec.Chunk;
-import water.fvec.Frame;
+import water.fvec.*;
 import water.fvec.RebalanceDataSet;
 import water.util.Log;
 
@@ -26,7 +25,7 @@ public class GBMTest extends TestUtil {
       fr = parse_test_file("./smalldata/gbm_test/Mfgdata_gaussian_GBM_testing.csv");
       GBMModel.GBMParameters parms = new GBMModel.GBMParameters();
       parms._train = fr._key;
-      parms._loss = Family.gaussian;
+      parms._distribution = Family.gaussian;
       parms._response_column = fr._names[1]; // Row in col 0, dependent in col 1, predictor in col 2
       parms._ntrees = 1;
       parms._max_depth = 1;
@@ -159,7 +158,7 @@ public class GBMTest extends TestUtil {
       parms._train = fr._key;
       parms._response_column = fr._names[idx];
       parms._ntrees = 4;
-      parms._loss = family;
+      parms._distribution = family;
       parms._max_depth = 4;
       parms._min_rows = 1;
       parms._nbins = 50;
@@ -217,7 +216,7 @@ public class GBMTest extends TestUtil {
       parms._min_rows = 10;
       parms._nbins = 100;
       parms._learn_rate = .2f;
-      parms._loss = Family.multinomial;
+      parms._distribution = Family.multinomial;
 
       GBM job = null;
       try {
@@ -254,7 +253,7 @@ public class GBMTest extends TestUtil {
       DKV.put(train);                    // Update frame after hacking it
       parms._train = train._key;
       parms._response_column = "Angaus"; // Train on the outcome
-      parms._loss = Family.multinomial;
+      parms._distribution = Family.multinomial;
 
       GBM job = new GBM(parms);
       gbm = job.trainModel().get();
@@ -290,7 +289,7 @@ public class GBMTest extends TestUtil {
       parms._ntrees = 1; // Build a CART tree - 1 tree, full learn rate, down to 1 row
       parms._learn_rate = 1.0f;
       parms._min_rows = 1;
-      parms._loss = Family.multinomial;
+      parms._distribution = Family.multinomial;
 
       job = new GBM(parms);
       gbm = job.trainModel().get();
@@ -342,7 +341,7 @@ public class GBMTest extends TestUtil {
       parms._min_rows = 1;
       parms._nbins = 20;
       parms._learn_rate = .2f;
-      parms._loss = Family.multinomial;
+      parms._distribution = Family.multinomial;
       gbm = new GBM(parms);
       gbm.trainModel();
       try { Thread.sleep(50); } catch( Exception ignore ) { }
@@ -427,7 +426,7 @@ public class GBMTest extends TestUtil {
       parms._valid = vfr._key;
       parms._response_column = "TARGET_D";
       parms._ntrees = 3;
-      parms._loss = Family.gaussian;
+      parms._distribution = Family.gaussian;
       // Build a first model; all remaining models should be equal
       GBM job1 = new GBM(parms);
       GBMModel gbm1 = job1.trainModel().get();
@@ -490,7 +489,7 @@ public class GBMTest extends TestUtil {
       parms._response_column = "C785";
       parms._ntrees = 2;
       parms._max_depth = 4;
-      parms._loss = Family.multinomial;
+      parms._distribution = Family.multinomial;
       // Build a first model; all remaining models should be equal
       GBM job = new GBM(parms);
       GBMModel gbm = job.trainModel().get();
@@ -508,7 +507,7 @@ public class GBMTest extends TestUtil {
     }
   }
 
-  // HDEXDEV-194 Check reproducibility for the same # of chunks (i.e., same # of nodes) and same parameters
+  // HEXDEV-194: Check reproducibility for the same # of chunks (i.e., same # of nodes) and same parameters
   @Test public void testReprodubility() {
     Frame tfr=null;
     final int N = 5;
@@ -538,8 +537,8 @@ public class GBMTest extends TestUtil {
         parms._max_depth = 8;
         parms._learn_rate = 0.1f;
         parms._min_rows = 10;
-//        parms._loss = Family.multinomial;
-        parms._loss = Family.gaussian;
+//        parms._distribution = Family.multinomial;
+        parms._distribution = Family.gaussian;
 
         // Build a first model; all remaining models should be equal
         GBM job = new GBM(parms);
@@ -557,7 +556,7 @@ public class GBMTest extends TestUtil {
     for( double mse : mses ) assertEquals(mse, mses[0], 1e-15);
   }
 
-  // PUBDEV-557 Test dependency on # nodes (for small number of bins, but fixed number of chunks)
+  // PUBDEV-557: Test dependency on # nodes (for small number of bins, but fixed number of chunks)
   @Test public void testReprodubilityAirline() {
     Frame tfr=null;
     final int N = 1;
@@ -594,7 +593,7 @@ public class GBMTest extends TestUtil {
         parms._ntrees = 7;
         parms._max_depth = 5;
         parms._min_rows = 10;
-        parms._loss = Family.bernoulli;
+        parms._distribution = Family.bernoulli;
         parms._balance_classes = true;
 
         // Build a first model; all remaining models should be equal
@@ -632,7 +631,7 @@ public class GBMTest extends TestUtil {
         parms._ntrees = 1;
         parms._max_depth = 1;
         parms._learn_rate = 1;
-        parms._loss = Family.bernoulli;
+        parms._distribution = Family.bernoulli;
 
         // Build a first model; all remaining models should be equal
         GBM job = new GBM(parms);
@@ -654,140 +653,41 @@ public class GBMTest extends TestUtil {
     for( double mse : mses ) assertEquals(0.0142093, mse, 1e-6);
   }
 
-
-  @Test public void testNoRowWeights() {
-    Frame tfr=null, vfr=null;
-
+  // Test uses big data and is too slow for a pre-push
+  @Test @Ignore public void testCUST_A() {
+    Frame tfr=null;
+    GBMModel gbm=null;
     Scope.enter();
     try {
-      tfr = parse_test_file("smalldata/junit/no_weights.csv");
+      // Load data, hack frames
+      tfr = parse_test_file("./smalldata/ad.csv");
+      int idx = tfr.find("label");
+      Scope.track(tfr.replace(idx, tfr.vecs()[idx].toEnum())._key);
       DKV.put(tfr);
+
+      // Same parms for all
       GBMModel.GBMParameters parms = new GBMModel.GBMParameters();
       parms._train = tfr._key;
-      parms._response_column = "response";
-      parms._loss = Family.bernoulli;
+      parms._valid = null;
+      parms._response_column = "label";
       parms._ntrees = 1;
-      parms._min_rows = 1;
-
-      // Build a first model; all remaining models should be equal
+      parms._max_depth = 5;
+      parms._nbins = 20;
+      parms._min_rows = 10;
+      parms._learn_rate = 1f;
+      parms._distribution = Family.AUTO;
       GBM job = new GBM(parms);
-      GBMModel gbm = job.trainModel().get();
-
-      gbm.score(parms.train());
-      hex.ModelMetricsBinomial mm = hex.ModelMetricsBinomial.getFromDKV(gbm, parms.train());
-      assertEquals(1.0, mm.auc()._auc, 1e-8);
-
-      double mse[] = gbm._output._mse_train;
-      assertEquals(0.202649429311526, mse[mse.length-1], 1e-6);
+      gbm = job.trainModel().get();
       job.remove();
-      gbm.delete();
-    } finally{
-      if (tfr != null) tfr.remove();
-      if (vfr != null) vfr.remove();
+
+      hex.ModelMetricsBinomial mm = hex.ModelMetricsBinomial.getFromDKV(gbm,tfr);
+      double auc = mm._auc._auc;
+      Assert.assertEquals(1.0,auc,1e-8);
+
+    } finally {
+      if (tfr  != null) tfr.remove();
+      if (gbm  != null) gbm.delete();
+      Scope.exit();
     }
-    Scope.exit();
   }
-
-  @Test public void testNoRowWeightsShuffled() {
-    Frame tfr=null, vfr=null;
-
-    Scope.enter();
-    try {
-      tfr = parse_test_file("smalldata/junit/no_weights_shuffled.csv");
-      DKV.put(tfr);
-      GBMModel.GBMParameters parms = new GBMModel.GBMParameters();
-      parms._train = tfr._key;
-      parms._response_column = "response";
-      parms._loss = Family.bernoulli;
-      parms._ntrees = 1;
-      parms._min_rows = 1;
-
-      // Build a first model; all remaining models should be equal
-      GBM job = new GBM(parms);
-      GBMModel gbm = job.trainModel().get();
-
-      gbm.score(parms.train());
-      hex.ModelMetricsBinomial mm = hex.ModelMetricsBinomial.getFromDKV(gbm, parms.train());
-      assertEquals(1.0, mm.auc()._auc, 1e-8);
-
-      double mse[] = gbm._output._mse_train;
-      assertEquals(0.202649429311526, mse[mse.length-1], 1e-6); //Note: better results than non-shuffled
-      job.remove();
-      gbm.delete();
-    } finally{
-      if (tfr != null) tfr.remove();
-      if (vfr != null) vfr.remove();
-    }
-    Scope.exit();
-  }
-
-  @Test public void testRowWeightsOne() {
-    Frame tfr=null, vfr=null;
-
-    Scope.enter();
-    try {
-      tfr = parse_test_file("smalldata/junit/weights_all_ones.csv");
-      DKV.put(tfr);
-      GBMModel.GBMParameters parms = new GBMModel.GBMParameters();
-      parms._train = tfr._key;
-      parms._response_column = "response";
-      parms._row_weights_column = "weight";
-      parms._loss = Family.bernoulli;
-      parms._ntrees = 1;
-      parms._min_rows = 1;
-
-      // Build a first model; all remaining models should be equal
-      GBM job = new GBM(parms);
-      GBMModel gbm = job.trainModel().get();
-
-      gbm.score(parms.train());
-      hex.ModelMetricsBinomial mm = hex.ModelMetricsBinomial.getFromDKV(gbm, parms.train());
-      assertEquals(1.0, mm.auc()._auc, 1e-8);
-
-      double mse[] = gbm._output._mse_train;
-      assertEquals(0.202649429311526, mse[mse.length-1], 1e-6); //Note: better results than non-shuffled
-      job.remove();
-      gbm.delete();
-    } finally{
-      if (tfr != null) tfr.remove();
-      if (vfr != null) vfr.remove();
-    }
-    Scope.exit();
-  }
-
-  @Ignore
-  @Test public void testRowWeights() {
-    Frame tfr=null, vfr=null;
-
-    Scope.enter();
-    try {
-      tfr = parse_test_file("smalldata/junit/weights.csv");
-      DKV.put(tfr);
-      GBMModel.GBMParameters parms = new GBMModel.GBMParameters();
-      parms._train = tfr._key;
-      parms._response_column = "response";
-      parms._row_weights_column = "weight";
-      parms._loss = Family.bernoulli;
-      parms._ntrees = 1;
-      parms._min_rows = 1;
-
-      // Build a first model; all remaining models should be equal
-      GBM job = new GBM(parms);
-      GBMModel gbm = job.trainModel().get();
-
-      gbm.score(parms.train());
-      hex.ModelMetricsBinomial mm = hex.ModelMetricsBinomial.getFromDKV(gbm, parms.train());
-      assertEquals(1.0, mm.auc()._auc, 1e-8);
-
-      double mse[] = gbm._output._mse_train;
-      assertEquals(0.202649429311526, mse[mse.length-1], 1e-6);
-      job.remove();
-      gbm.delete();
-    } finally{
-      if (tfr != null) tfr.remove();
-      if (vfr != null) vfr.remove();
-    }
-    Scope.exit();
-  }
-
 }

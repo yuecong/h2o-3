@@ -8,9 +8,7 @@ import water.Job;
 import water.Key;
 import water.api.*;
 import water.api.ModelParametersSchema.ValidationMessageBase;
-import water.util.DocGen;
-import water.util.Log;
-import water.util.ReflectionUtils;
+import water.util.*;
 
 import java.lang.reflect.Constructor;
 import java.util.HashMap;
@@ -20,6 +18,8 @@ import java.util.Properties;
 public class ModelBuilderSchema<B extends ModelBuilder, S extends ModelBuilderSchema<B,S,P>, P extends ModelParametersSchema> extends Schema<B,S> implements SpecifiesHttpResponseCode {
   // NOTE: currently ModelBuilderSchema has its own JSON serializer.
   // If you add more fields here you MUST add them to writeJSON_impl() below.
+
+  public static class IcedHashMapStringModelBuilderSchema extends IcedSortedHashMap<String, ModelBuilderSchema> {}
 
   // Input fields
   @API(help="Model builder parameters.")
@@ -35,8 +35,11 @@ public class ModelBuilderSchema<B extends ModelBuilder, S extends ModelBuilderSc
   @API(help="Model categories this ModelBuilder can build.", values={ "Unknown", "Binomial", "Multinomial", "Regression", "Clustering", "AutoEncoder", "DimReduction" }, direction = API.Direction.OUTPUT)
   public Model.ModelCategory[] can_build;
 
+  @API(help="Should the builder always be visible, be marked as beta, or only visible if the user starts up with the experimental flag?", values = { "Experimental", "Beta", "AlwaysVisible" }, direction = API.Direction.OUTPUT)
+  public ModelBuilder.BuilderVisibility visibility;
+
   @API(help = "Job Key", direction = API.Direction.OUTPUT)
-  public JobV2 job;
+  public JobV3 job;
 
   @API(help="Parameter validation messages", direction=API.Direction.OUTPUT)
   public ValidationMessageBase validation_messages[];
@@ -97,13 +100,13 @@ public class ModelBuilderSchema<B extends ModelBuilder, S extends ModelBuilderSc
 
         if (null != parameters) {
           _parameters = (Model.Parameters) parameters.createImpl();
-          if (null != parameters.destination_key)
-            _parameters._destination_key = Key.make(parameters.destination_key.name);
+          if (null != parameters.model_id)
+            _parameters._model_id = Key.make(parameters.model_id.name);
         }
         Constructor builder_constructor = builder_class.getConstructor(new Class[]{parameters_class});
         impl = (B) builder_constructor.newInstance(_parameters);
         impl.clearInitState(); // clear out validation errors from default parameters
-        impl._parms._destination_key = null;
+        impl._parms._model_id = null;
       } catch (Exception e) {
         throw H2O.fail("Caught exception trying to instantiate a builder instance for ModelBuilderSchema: " + this + ": " + e, e);
       }
@@ -125,7 +128,8 @@ public class ModelBuilderSchema<B extends ModelBuilder, S extends ModelBuilderSc
     this.algo_full_name = ModelBuilder.getAlgoFullName(this.algo);
 
     this.can_build = builder.can_build();
-    job = (JobV2)Schema.schema(this.getSchemaVersion(), Job.class).fillFromImpl(builder);
+    this.visibility = builder.builderVisibility();
+    job = (JobV3)Schema.schema(this.getSchemaVersion(), Job.class).fillFromImpl(builder);
     this.validation_messages = new ValidationMessageBase[builder._messages.length];
     int i = 0;
     for( ModelBuilder.ValidationMessage vm : builder._messages ) {
@@ -171,7 +175,7 @@ public class ModelBuilderSchema<B extends ModelBuilder, S extends ModelBuilderSc
 
   @Override public DocGen.HTML writeHTML_impl( DocGen.HTML ab ) {
     ab.title(this.getClass().getSimpleName()+" Started");
-    String url = JobV2.link(job.key.key());
+    String url = JobV3.link(job.key.key());
     return ab.href("Poll",url,url);
   }
 
@@ -187,6 +191,8 @@ public class ModelBuilderSchema<B extends ModelBuilder, S extends ModelBuilderSc
     ab.putJSONStr("algo_full_name", algo_full_name);
     ab.put1(',');
     ab.putJSONAEnum("can_build", can_build);
+    ab.put1(',');
+    ab.putJSONEnum("visibility", visibility);
     ab.put1(',');
     ab.putJSONA("validation_messages", validation_messages);
     ab.put1(',');

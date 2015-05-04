@@ -9,7 +9,9 @@
 apply from: 'gradle/java.gradle'
 
 // For multiproject setup we have to apply release plugin here (we share same release number cross all modules)
-apply from: 'gradle/release.gradle'
+if (project.hasProperty("doRelease")) {
+    apply from: 'gradle/release.gradle'
+}
 
 // Print out time taken for each task so we find things that are slow.
 apply from: 'gradle/timing.gradle'
@@ -44,7 +46,8 @@ ext {
       project(':h2o-web'),
       project(':h2o-app'),
       project(':h2o-scala'),
-      project(':h2o-persist-hdfs')
+      project(':h2o-persist-hdfs'),
+      project(':h2o-genmodel')
     ]
 
     javaProjects = [
@@ -53,7 +56,8 @@ ext {
       project(':h2o-web'),
       project(':h2o-app'),
       project(':h2o-persist-hdfs'),
-      project(':h2o-test-integ')
+      project(':h2o-test-integ'),
+      project(':h2o-genmodel')
     ]
 
     scalaProjects = [
@@ -74,6 +78,11 @@ ext {
     junitVersion  = '4.11'
     jets3tVersion = '0.7.1'
     awsJavaSdkVersion = '1.8.3'
+
+    //
+    // H2O's REST API version
+    //
+    h2oRESTApiVersion = '3'
 }
 
 //
@@ -85,6 +94,10 @@ allprojects {
     apply plugin: 'idea'
     apply plugin: 'eclipse'
     apply from: "$rootDir/gradle/artifacts.gradle"
+
+    ext {
+        isRelease = rootProject.hasProperty("doRelease")
+    }
 }
 
 // Compute applyFindbugsPlugin property
@@ -154,7 +167,7 @@ subprojects {
 }
 
 task wrapper(type: Wrapper) {
-  gradleVersion = '2.2.1'
+  gradleVersion = '2.3'
 }
 
 //

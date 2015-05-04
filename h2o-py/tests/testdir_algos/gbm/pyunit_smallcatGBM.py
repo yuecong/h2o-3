@@ -20,13 +20,14 @@ def smallcatGBM(ip,port):
   #alphabet.summary()
 
   # Prepare data for scikit use
-  trainData = np.loadtxt(h2o.locate("smalldata/gbm_test/alphabet_cattest.csv"), delimiter=',', skiprows=1, converters={0:lambda s: ord(s.split("\"")[1])})
+  trainData = np.loadtxt(h2o.locate("smalldata/gbm_test/alphabet_cattest.csv"), delimiter=',', skiprows=1,
+                         converters={0:lambda s: ord(s.split("\"")[1])})
   trainDataResponse = trainData[:,1]
   trainDataFeatures = trainData[:,0]
   
   # Train H2O GBM Model:
   #Log.info("H2O GBM (Naive Split) with parameters:\nntrees = 1, max_depth = 1, nbins = 100\n")
-  gbm_h2o = h2o.gbm(x=alphabet[['X']], y=alphabet["y"], loss="bernoulli", ntrees=1, max_depth=1, nbins=100)
+  gbm_h2o = h2o.gbm(x=alphabet[['X']], y=alphabet["y"], distribution="bernoulli", ntrees=1, max_depth=1, nbins=100)
   gbm_h2o.show()
   
   # Train scikit GBM Model:

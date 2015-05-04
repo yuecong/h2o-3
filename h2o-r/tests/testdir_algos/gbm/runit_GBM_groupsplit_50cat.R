@@ -4,19 +4,19 @@ source('../../h2o-runit.R')
 test.GBM.groupsplit <- function(conn) {
   # Training set has only 45 categories cat1 through cat45
   Log.info("Importing 50_cattest_train.csv data...\n")
-  train.hex <- h2o.uploadFile(conn, locate("smalldata/gbm_test/50_cattest_train.csv"), key = "train.hex")
+  train.hex <- h2o.uploadFile(conn, locate("smalldata/gbm_test/50_cattest_train.csv"), destination_frame = "train.hex")
   train.hex$y <- as.factor(train.hex$y)
   Log.info("Summary of 50_cattest_train.csv from H2O:\n")
   print(summary(train.hex))
 
   # Train H2O GBM Model:
   Log.info(paste("H2O GBM with parameters:\nntrees = 10, max_depth = 20, nbins = 20\n", sep = ""))
-  drfmodel.h2o <- h2o.gbm(x = c("x1", "x2"), y = "y", training_frame = train.hex, ntrees = 10, max_depth = 5, nbins = 20, loss = "bernoulli")
+  drfmodel.h2o <- h2o.gbm(x = c("x1", "x2"), y = "y", training_frame = train.hex, ntrees = 10, max_depth = 5, nbins = 20, distribution = "bernoulli")
   print(drfmodel.h2o)
 
   # Test dataset has all 50 categories cat1 through cat50
   Log.info("Importing 50_cattest_test.csv data...\n")
-  test.hex <- h2o.uploadFile(conn, locate("smalldata/gbm_test/50_cattest_test.csv"), key="test.hex")
+  test.hex <- h2o.uploadFile(conn, locate("smalldata/gbm_test/50_cattest_test.csv"), destination_frame="test.hex")
   Log.info("Summary of 50_cattest_test.csv from H2O:\n")
   print(summary(test.hex))
 

@@ -11,7 +11,7 @@ source('../h2o-runit.R')
 
 test <- function(conn) {
     print("Reading in arcene dataset")
-        dataset = h2o.importFile(conn, locate("smalldata/arcene/arcene_train.data"), key="dataset", header=FALSE)
+        dataset = h2o.importFile(conn, locate("smalldata/arcene/arcene_train.data"), destination_frame="dataset", header=FALSE)
 
     print("Time copying of entire datatset")
         startTime = proc.time()
@@ -21,8 +21,8 @@ test <- function(conn) {
         elapsedTime = endTime - startTime
         print(elapsedTime)
 
-    print("Assert runtime less than 120 seconds")
-        stopifnot(elapsedTime < 120)  # should finish in less than two minutes.
+    print("Assert runtime less than 180 seconds")
+        stopifnot(elapsedTime < 180)  # should finish in less than three minutes.
 
   testEnd()
 }

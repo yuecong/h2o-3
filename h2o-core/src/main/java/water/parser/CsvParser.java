@@ -18,7 +18,7 @@ class CsvParser extends Parser {
 
   // Parse this one Chunk (in parallel with other Chunks)
   @SuppressWarnings("fallthrough")
-  @Override public DataOut parseChunk(int cidx, final Parser.DataIn din, final Parser.DataOut dout) {
+  @Override public ParseWriter parseChunk(int cidx, final ParseReader din, final ParseWriter dout) {
     ValueString str = new ValueString();
     byte[] bits = din.getChunkData(cidx);
     if( bits == null ) return dout;
@@ -69,7 +69,7 @@ class CsvParser extends Parser {
     }
     dout.newLine();
 
-    final boolean forceable = dout instanceof ParseDataset.FVecDataOut && ((ParseDataset.FVecDataOut)dout)._ctypes != null && _setup._column_types != null;
+    final boolean forceable = dout instanceof FVecParseWriter && ((FVecParseWriter)dout)._ctypes != null && _setup._column_types != null;
 MAIN_LOOP:
     while (true) {
       boolean forcedEnum = forceable && colIdx < _setup._column_types.length && _setup._column_types[colIdx] == Vec.T_ENUM;
@@ -111,7 +111,7 @@ MAIN_LOOP:
             str.addBuff(bits);
           }
           if( _setup._na_strings != null
-                  && _setup._na_strings.length < colIdx
+                  && _setup._na_strings.length < colIdx  // FIXME: < is suspicious PUBDEV-869
                   && _setup._na_strings[colIdx] != null
                   && str.equals(_setup._na_strings[colIdx]))
             dout.addInvalidCol(colIdx);
@@ -640,7 +640,15 @@ MAIN_LOOP:
       }
       data[0] = determineTokens(lines[0], sep, singleQuotes);
       ncols = (ncols > 0) ? ncols : data[0].length;
-      if( checkHeader == GUESS_HEADER) labels =  ParseSetup.allStrings(data[0]) ? data[0] : null;
+      if( checkHeader == GUESS_HEADER) {
+        if (ParseSetup.allStrings(data[0])) {
+          labels = data[0];
+          checkHeader = HAS_HEADER;
+        } else {
+          labels = null;
+          checkHeader = NO_HEADER;
+        }
+      }
       else if( checkHeader == HAS_HEADER ) labels = data[0];
       else labels = null;
     } else {                    // 2 or more lines
@@ -668,7 +676,7 @@ MAIN_LOOP:
         labels = data[0];
       } else {
         checkHeader = NO_HEADER;
-        labels = null;
+        labels = columnNames;
       }
 
       // See if compatible headers
@@ -705,11 +713,10 @@ MAIN_LOOP:
     if (columnTypes == null || ncols != columnTypes.length) {
       InputStream is = new ByteArrayInputStream(bits);
       CsvParser p = new CsvParser(resSetup);
-      InspectDataOut dout = new InspectDataOut(resSetup._number_columns);
+      PreviewParseWriter dout = new PreviewParseWriter(resSetup._number_columns);
       try {
         p.streamParse(is, dout);
-        resSetup._column_types = dout.guessTypes();
-        resSetup._na_strings = dout.guessNAStrings(resSetup._column_types);
+        resSetup._column_previews = dout;
       } catch (Throwable e) {
         throw new RuntimeException(e);
       }

@@ -49,10 +49,10 @@ myX = c("Origin", "Dest", "Distance", "UniqueCarrier", "fMonth", "fDayofMonth", 
 myY="IsDepDelayed"
 
 #gbm
-air.gbm <- h2o.gbm(x = myX, y = myY, loss = "multinomial", training_frame = air.train, ntrees = 10,
+air.gbm <- h2o.gbm(x = myX, y = myY, distribution = "multinomial", training_frame = air.train, ntrees = 10,
                    max_depth = 3, learn_rate = 0.01, nbins = 100, validation_frame = air.valid)
 
-print(air.gbm@model)
+print(air.gbm)
 print("Variable Importance")
 print(air.gbm@model$variable_importances)
 
@@ -62,26 +62,30 @@ print(p@metrics$AUC)
 
 #RF
 # air.rf <- h2o.randomForest(x=myX,y=myY,data=air.train,ntree=10,depth=20,seed=12,importance=T,validation=air.valid, type = "BigData")
-# print(air.rf@model)
+# print(air.rf)
 
 #uploading test file to h2o
-air.test <- h2o.importFile(conn,testFilePath,key="air.test")
+air.test <- h2o.importFile(conn,testFilePath,destination_frame="air.test")
 
 model_object <- air.gbm # air.rf #air.glm air.gbm air.dl
 
-#predicting on test file 
+#predicting on test file
 pred <- predict(model_object,air.test)
 head(pred)
 
 perf <- h2o.performance(model_object,air.test)
 #Building confusion matrix for test set
-perf@metrics$cm$table
+
+# FIXME - these require work
+h2o.confusionMatrix(perf)
+h2o.auc(perf)
+h2o.precision(perf)
+h2o.accuracy(perf)
+
+#perf@metrics$AUC
 
 #Plot ROC for test set
-
-perf@metrics$auc$precision
-perf@metrics$auc$accuracy
-# perf@auc$auc
+#FIXME
 plot(perf,type="roc")
 
 PASS_BANNER()

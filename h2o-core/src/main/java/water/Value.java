@@ -60,7 +60,7 @@ public final class Value extends Iced implements ForkJoinPool.ManagedBlocker {
   // In any case, they will cause issues with both GC (giant pause times on
   // many collectors) and I/O (long term blocking of TCP I/O channels to
   // service a single request, causing starvation of other requests).
-  private static final int MAX = 256*1024*1024;
+  public static final int MAX = 256*1024*1024;
 
   /** Size of the serialized wad of bits.  Values are wads of bits; known small
    *  enough to 'chunk' politely on disk, or fit in a Java heap (larger Vecs
@@ -162,6 +162,8 @@ public final class Value extends Iced implements ForkJoinPool.ManagedBlocker {
   // Time of last access to this value.
   transient long _lastAccessedTime = System.currentTimeMillis();
   private void touch() {_lastAccessedTime = System.currentTimeMillis();}
+  // Exposed and used for testing only; used to trigger premature cleaning/disk-swapping
+  void touchAt(long time) {_lastAccessedTime = time;}
 
   // ---
   // Backend persistence info.  3 bits are reserved for 8 different flavors of
@@ -206,6 +208,7 @@ public final class Value extends Iced implements ForkJoinPool.ManagedBlocker {
   void storePersist() throws IOException {
     if( isPersisted() ) return;
     H2O.getPM().store(backend(), this);
+    assert isPersisted();
   }
 
   /** Remove dead Values from disk */
@@ -310,7 +313,7 @@ public final class Value extends Iced implements ForkJoinPool.ManagedBlocker {
     _type = (short)pojo.frozenType();
     _mem = (pojo instanceof Chunk)?((Chunk)pojo).getBytes():pojo.write(new AutoBuffer()).buf();
     _max = _mem.length;
-    assert _max < MAX : "Value size=0x"+Integer.toHexString(_max);
+    assert _max < MAX : "Value size = " + _max + " (0x"+Integer.toHexString(_max) + ") >= (MAX=" + MAX + ").";
     // For the ICE backend, assume new values are not-yet-written.
     // For HDFS & NFS backends, assume we from global data and preserve the
     // passed-in persist bits

@@ -1,6 +1,5 @@
 package hex;
 
-import java.util.Arrays;
 import water.Iced;
 import water.MRTask;
 import water.Scope;
@@ -8,6 +7,8 @@ import water.fvec.Chunk;
 import water.fvec.Vec;
 import water.util.ArrayUtils;
 import water.util.TwoDimTable;
+
+import java.util.Arrays;
 
 public class ConfusionMatrix extends Iced {
   private TwoDimTable _table;
@@ -234,12 +235,12 @@ public class ConfusionMatrix extends Iced {
 
     String[] colHeader = Arrays.copyOf(pdomain,pdomain.length+2);
     colHeader[colHeader.length-2] = "Error";
-    colHeader[colHeader.length-1] = "";
+    colHeader[colHeader.length-1] = "Rate";
 
     String[] colType = new String[colHeader.length];
     String[] colFormat = new String[colHeader.length];
     for (int i=0; i<colFormat.length-1; ++i) {
-      colType[i]   = "integer";
+      colType[i]   = "int";
       colFormat[i] = "%d";
     }
     colType[colFormat.length-2]   = "double";
@@ -268,7 +269,7 @@ public class ConfusionMatrix extends Iced {
     // set format width
     colFormat[colFormat.length-1] = "= %" + width + "s";
 
-    TwoDimTable table = new TwoDimTable("Confusion Matrix", null, rowHeader, colHeader, colType, colFormat, "Act/Pred");
+    TwoDimTable table = new TwoDimTable("Confusion Matrix", "vertical: actual; across: predicted", rowHeader, colHeader, colType, colFormat, null);
 
     // Main CM Body
     for (int a = 0; a < _cm.length; a++) {

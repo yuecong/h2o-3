@@ -285,27 +285,59 @@ public class Vec extends Keyed<Vec> {
   }
   
   // ======= Create zero/constant Vecs ======
-
+  /** Make a new zero-filled vec **/
+  public static Vec makeZero( long len, boolean redistribute ) {
+    return makeCon(0L,len,redistribute);
+  }
   /** Make a new zero-filled vector with the given row count. 
    *  @return New zero-filled vector with the given row count. */
   public static Vec makeZero( long len ) { return makeCon(0L,len); }
 
+  /** Make a new constant vector with the given row count, and redistribute the data
+   * evenly around the cluster.
+   * @param x The value with which to fill the Vec.
+   * @param len Number of rows.
+   * @return New cosntant vector with the given len.
+   */
+  public static Vec makeCon(double x, long len) {
+    return makeCon(x,len,true);
+  }
+
   /** Make a new constant vector with the given row count. 
    *  @return New constant vector with the given row count. */
-  public static Vec makeCon(double x, long len) {
+  public static Vec makeCon(double x, long len, boolean redistribute) {
     int log_rows_per_chunk = FileVec.DFLT_LOG2_CHUNK_SIZE;
-    return makeCon(x, len, log_rows_per_chunk);
+    return makeCon(x,len,log_rows_per_chunk,redistribute);
+  }
+
+  /** Make a new constant vector with the given row count, and redistribute the data evenly
+   *  around the cluster.
+   *  @return New constant vector with the given row count. */
+  public static Vec makeCon(double x, long len, int log_rows_per_chunk) {
+    return makeCon(x,len,log_rows_per_chunk,true);
   }
 
   /** Make a new constant vector with the given row count.
    *  @return New constant vector with the given row count. */
-  public static Vec makeCon(double x, long len, int log_rows_per_chunk) {
+  public static Vec makeCon(double x, long len, int log_rows_per_chunk, boolean redistribute) {
     int nchunks = (int)Math.max(1,len >> log_rows_per_chunk);
     long[] espc = new long[nchunks+1];
     for( int i=0; i<nchunks; i++ )
       espc[i] = ((long)i)<<log_rows_per_chunk;
     espc[nchunks] = len;
-    return makeCon(x,VectorGroup.VG_LEN1,espc);
+    Vec v0 = makeCon(x,VectorGroup.VG_LEN1,espc);
+    int chunks = (int)Math.min( 4 * H2O.NUMCPUS * H2O.CLOUD.size(), v0.length());
+    if( redistribute && v0.nChunks() < chunks && v0.length() > 10*chunks ) { // Rebalance
+      Key newKey = Key.make(".makeConRebalance" + chunks);
+      Frame f = new Frame(v0);
+      RebalanceDataSet rb = new RebalanceDataSet(f, newKey, chunks);
+      H2O.submitTask(rb);
+      rb.join();
+      Keyed.remove(v0._key);
+      v0 = (((Frame)DKV.getGet(newKey)).anyVec()).makeCopy(null); // this is gross.
+      Keyed.remove(newKey);
+    }
+    return v0;
   }
 
   /** Make a new vector with the same size and data layout as the current one,
@@ -325,6 +357,22 @@ public class Vec extends Keyed<Vec> {
    * @return a copy of the vector.
    */
   public Vec makeCopy(String[] domain){
+    Vec v = doCopy();
+    v._domain = domain;
+    v._type = _type;
+    DKV.put(v._key, v);
+    return v;
+  }
+
+  public Vec makeCopy(String[] domain, byte type) {
+    Vec v = doCopy();
+    v._domain = domain;
+    v._type = type;
+    DKV.put(v._key, v);
+    return v;
+  }
+
+  private Vec doCopy() {
     final Vec v = new Vec(group().addVec(),_espc.clone());
     new MRTask(){
       @Override public void map(Chunk c){
@@ -336,9 +384,6 @@ public class Vec extends Keyed<Vec> {
         DKV.put(v.chunkKey(c.cidx()), c2, _fs);
       }
     }.doAll(this);
-    v._domain = domain;
-    v._type = _type;
-    DKV.put(v._key, v);
     return v;
   }
 
@@ -361,6 +406,19 @@ public class Vec extends Keyed<Vec> {
     long [] espc = new long[2];
     espc[1] = vals.length;
     Vec v = new Vec(vecKey,espc);
+    NewChunk nc = new NewChunk(v,0);
+    Futures fs = new Futures();
+    for(double d:vals)
+      nc.addNum(d);
+    nc.close(fs);
+    DKV.put(v._key,v,fs);
+    fs.blockForPending();
+    return v;
+  }
+  public static Vec makeVec(int [] vals, String [] domain, Key<Vec> vecKey){
+    long [] espc = new long[2];
+    espc[1] = vals.length;
+    Vec v = new Vec(vecKey,espc, domain);
     NewChunk nc = new NewChunk(v,0);
     Futures fs = new Futures();
     for(double d:vals)
@@ -393,7 +451,6 @@ public class Vec extends Keyed<Vec> {
     return v0;
   }
 
-
   public Vec [] makeZeros(int n){return makeZeros(n,null,null);}
   public Vec [] makeZeros(int n, String [][] domain, byte[] types){ return makeCons(n, 0, domain, types);}
 
@@ -423,8 +480,8 @@ public class Vec extends Keyed<Vec> {
   /** A Vec from an array of doubles
    *  @param rows Data
    *  @return The Vec  */
-  public static Vec makeCon(double ...rows) { 
-    Key k = Vec.VectorGroup.VG_LEN1.addVec();
+  public static Vec makeCon(Key k, double ...rows) {
+    k = k==null?Vec.VectorGroup.VG_LEN1.addVec():k;
     Futures fs = new Futures();
     AppendableVec avec = new AppendableVec(k);
     NewChunk chunk = new NewChunk(avec, 0);
@@ -437,14 +494,14 @@ public class Vec extends Keyed<Vec> {
 
   /** Make a new vector initialized to increasing integers, starting with 1.
    *  @return A new vector initialized to increasing integers, starting with 1. */
-  public static Vec makeSeq( long len) {
+  public static Vec makeSeq( long len, boolean redistribute) {
     return new MRTask() {
       @Override public void map(Chunk[] cs) {
         for( Chunk c : cs )
           for( int r = 0; r < c._len; r++ )
             c.set(r, r + 1 + c._start);
       }
-    }.doAll(makeZero(len))._fr.vecs()[0];
+    }.doAll(makeZero(len, redistribute))._fr.vecs()[0];
   }
 
   /** Make a new vector initialized to increasing integers, starting with `min`.
@@ -666,7 +723,7 @@ public class Vec extends Keyed<Vec> {
   /** Get a Chunk's Value by index.  Basically the index-to-key map, plus the
    *  {@code DKV.get()}.  Warning: this pulls the data locally; using this call
    *  on every Chunk index on the same node will probably trigger an OOM!  */
-  Value chunkIdx( int cidx ) {
+  public Value chunkIdx( int cidx ) {
     Value val = DKV.get(chunkKey(cidx));
     assert checkMissing(cidx,val);
     return val;
@@ -967,8 +1024,9 @@ public class Vec extends Keyed<Vec> {
     private final long[] _domain;
     CPTask(long[] domain) { _domain = domain;}
     @Override public void map(Chunk c, NewChunk nc) {
-      for(int i=0;i<c._len;++i)
-        if( _domain==null )
+      for(int i=0;i<c._len;++i) {
+        if( c.isNA(i) ) { nc.addNA(); continue; }
+        if( _domain == null )
           nc.addNum(c.at8(i));
         else {
           long num = Arrays.binarySearch(_domain,c.at8(i));  // ~24 hits in worst case for 10M levels
@@ -976,6 +1034,7 @@ public class Vec extends Keyed<Vec> {
             throw new IllegalArgumentException("Could not find the enum value!");
           nc.addNum(num);
         }
+      }
     }
   }
 

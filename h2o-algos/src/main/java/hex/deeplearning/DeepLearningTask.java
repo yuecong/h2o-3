@@ -19,7 +19,7 @@ public class DeepLearningTask extends FrameTask<DeepLearningTask> {
   final public hex.deeplearning.DeepLearningModel.DeepLearningModelInfo model_info() { return _output; }
 
   transient Neurons[] _neurons;
-  transient Random _row_weight_rng;
+  transient Random _dropout_rng;
 
   int _chunk_node_count = 1;
 
@@ -45,6 +45,7 @@ public class DeepLearningTask extends FrameTask<DeepLearningTask> {
   // and link them to shared weights
   @Override protected void chunkInit(){
     _neurons = makeNeuronsForTraining(_output);
+    _dropout_rng = RandomUtils.getRNG(System.currentTimeMillis());
   }
 
   @Override public final void processRow(long seed, DataInfo.Row r){
@@ -53,11 +54,15 @@ public class DeepLearningTask extends FrameTask<DeepLearningTask> {
       seed += model_info().get_processed_global(); //avoid periodicity
       seed = 1111; //FIXME
     } else {
-      seed = new Random().nextLong();
+      seed = _dropout_rng.nextLong(); // non-reproducible case - make a fast & good random number
     }
     ((Neurons.Input)_neurons[0]).setInput(seed, r.numVals, r.nBins, r.binIds);
+<<<<<<< HEAD
       step(seed, _neurons, _output, _training, r.response);
 
+=======
+    step(seed, _neurons, _output, _training, r.response);
+>>>>>>> arno_jenkins
   }
 
   @Override protected void chunkDone(long n) {
