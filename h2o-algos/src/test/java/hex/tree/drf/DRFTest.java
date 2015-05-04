@@ -571,7 +571,6 @@ public class DRFTest extends TestUtil {
       assertEquals(0.20462305452536414, mses[i], 1e-4); //check for the same result on 1 nodes and 5 nodes
     }
   }
-<<<<<<< HEAD
 
   @Test public void testNoRowWeights() {
     Frame tfr=null, vfr=null;
@@ -708,6 +707,4 @@ public class DRFTest extends TestUtil {
     }
     Scope.exit();
   }
-=======
->>>>>>> arno_jenkins
 }

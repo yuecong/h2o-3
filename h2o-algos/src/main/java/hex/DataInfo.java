@@ -14,10 +14,7 @@ import java.util.Arrays;
 public class DataInfo extends Keyed {
   public int [] _activeCols;
   public Frame _adaptedFrame;
-<<<<<<< HEAD
   public int _row_weights; // number of row weights
-=======
->>>>>>> arno_jenkins
   public int _responses;   // number of responses
   boolean _weightsVec;
   // vecs are arranged so that there is predictors | response | filter | offset | weights,
@@ -58,10 +55,6 @@ public class DataInfo extends Keyed {
     return this;
   }
 
-<<<<<<< HEAD
-=======
-
->>>>>>> arno_jenkins
   @Override protected long checksum_impl() {throw H2O.unimpl();} // don't really need checksum
 
   public enum TransformType { NONE, STANDARDIZE, NORMALIZE, DEMEAN, DESCALE }
@@ -475,12 +468,8 @@ public class DataInfo extends Keyed {
     public double [] response;
     public int    [] numIds;
     public int    [] binIds;
-<<<<<<< HEAD
     public float row_weight;
-    public int       rid;
-=======
     public long      rid;
->>>>>>> arno_jenkins
     public int       nBins;
     public int       nNums;
     public final double etaOffset;
@@ -575,14 +564,11 @@ public class DataInfo extends Keyed {
         d = (d - _normSub[i]) * _normMul[i];
       row.numVals[i] = d;
     }
-<<<<<<< HEAD
 
     if (_row_weights > 1) throw H2O.unimpl("Only support one column for row weights for now.");
     for (int i=0; i<_row_weights; ++i)
       row.row_weight = (float)chunks[_cats + _nums + i].atd(rid);
 
-=======
->>>>>>> arno_jenkins
     for (int i = 0; i < _responses; ++i) {
       row.response[i] = chunks[chunks.length - _responses + i].atd(rid);
       if (_normRespMul != null)
@@ -673,11 +659,8 @@ public class DataInfo extends Keyed {
         row.addNum(cid + numStart + _bins, d);
       }
     }
-<<<<<<< HEAD
     if (_row_weights > 0) throw H2O.unimpl();
 
-=======
->>>>>>> arno_jenkins
     double rsum = 0;
     int nobs = 0;
     // response(s)

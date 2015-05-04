@@ -207,11 +207,7 @@ public class DRF extends SharedTree<hex.tree.drf.DRFModel, hex.tree.drf.DRFModel
         // TODO: parallelize more? build more than k trees at each time, we need to care about temporary data
         // Idea: launch more DRF at once.
         Timer kb_timer = new Timer();
-<<<<<<< HEAD
-        ktrees = buildNextKTrees(tra_fr,_mtry,_parms._sample_rate,rand,tid);
-=======
-        buildNextKTrees(_train,_mtry,_parms._sample_rate,rand,tid);
->>>>>>> arno_jenkins
+        buildNextKTrees(tra_fr,_mtry,_parms._sample_rate,rand,tid);
         Log.info((tid+1) + ". tree was built " + kb_timer.toString());
         DRF.this.update(1);
         if( !isRunning() ) return; // If canceled during building, do not bulkscore
@@ -321,19 +317,8 @@ public class DRF extends SharedTree<hex.tree.drf.DRFModel, hex.tree.drf.DRFModel
       else /* regression */ asSSE  (_treeMeasuresOnOOB).append(cp.sse, cp.allRows);
       Log.debug("CollectPreds done: " + t_4);
 
-<<<<<<< HEAD
-      // Collect leaves stats
-      for (int i=0; i<ktrees.length; i++)
-        if( ktrees[i] != null )
-          ktrees[i]._leaves = ktrees[i].len() - leafs[i];
-      // DEBUG: Print the generated K trees
-      printGenerateTrees(ktrees);
-
-      return ktrees;
-=======
       // Grow the model by K-trees
       _model._output.addKTrees(ktrees);
->>>>>>> arno_jenkins
     }
 
 

@@ -35,6 +35,23 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
   public final Frame valid() { return _valid; }
   protected transient Frame _valid;
 
+  public boolean canHaveRowWeights() { return true; }
+  protected transient boolean _have_dummy_weights;
+  protected transient String _row_weights_name;
+  protected transient Vec _row_weights; // training row weights column
+  protected Key _row_weights_key; // training row weights key
+  public final Vec rowWeights() { return _row_weights == null ? (_row_weights = DKV.getGet(_row_weights_key)) : _row_weights; }
+
+  protected transient Vec _vrow_weights; // validation row weights column
+  protected Key _vrow_weights_key; // validation row weights key
+  public final Vec vrowWeights() { return _vrow_weights == null ? (_vrow_weights = DKV.getGet(_vrow_weights_key)) : _vrow_weights; }
+
+  public Frame addRowWeights(Frame fr, Vec weights) {
+    Frame tra_fr = new Frame(fr._key, fr.names(), fr.vecs());
+    tra_fr.add(_row_weights_name, weights);
+    return tra_fr;
+  }
+
   // TODO: tighten up the type
   // Map the algo name (e.g., "deeplearning") to the builder class (e.g., DeepLearning.class) :
   private static final Map<String, Class<? extends ModelBuilder>> _builders = new HashMap<>();
@@ -257,7 +274,6 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
     }.doIt(_train,"Dropping String and UUID columns: ",expensive);
 
     // Check that at least some columns are not-constant and not-all-NAs
-<<<<<<< HEAD
     if (_train.numCols() == 0)
       error("_train","There are no usable columns to generate a model");
 
@@ -295,10 +311,6 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
         _vrow_weights_key = _vrow_weights._key;
       }
     }
-=======
-    if( _train.numCols() == 0 )
-      error("_train","There are no usable columns to generate model");
->>>>>>> arno_jenkins
 
     // Build the validation set to be compatible with the training set.
     // Toss out extra columns, complain about missing ones, remap enums

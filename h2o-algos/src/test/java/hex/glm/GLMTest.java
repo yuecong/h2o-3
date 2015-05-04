@@ -531,13 +531,7 @@ public class GLMTest  extends TestUtil {
       fr.remove("ID").remove();
       DKV.put(fr._key,fr);
       // now check the gradient
-<<<<<<< HEAD
-      DataInfo dinfo = new DataInfo(Key.make(),fr, null, 1, true, TransformType.NONE, DataInfo.TransformType.NONE, true, 0);
-      // todo: remove, result from h2o.1
-      // beta = new double[]{0.06644411112189823, -0.11172826074033719, 9.77360531534266, -9.972691681370678, 0.24664516432994327, -0.12369381230741447, 0.11330593275731994, -19.64465932744036};
-=======
       DataInfo dinfo = new DataInfo(Key.make(),fr, null, 1, true, TransformType.NONE, DataInfo.TransformType.NONE, true, false);
->>>>>>> arno_jenkins
       LBFGS_LogisticGradientTask lt = (LBFGS_LogisticGradientTask)new LBFGS_LogisticGradientTask(dinfo,params,0,beta,1.0/380.0, null).doAll(dinfo._adaptedFrame);
       double [] grad = lt._gradient;
       String [] names = model._dinfo.coefNames();
@@ -606,11 +600,7 @@ public class GLMTest  extends TestUtil {
       model = DKV.get(modelKey).get();
       fr.add("CAPSULE", fr.remove("CAPSULE"));
       // now check the gradient
-<<<<<<< HEAD
-      DataInfo dinfo = new DataInfo(Key.make(),fr, null, 1, true, TransformType.NONE, DataInfo.TransformType.NONE, true, 0);
-=======
       DataInfo dinfo = new DataInfo(Key.make(),fr, null, 1, true, TransformType.NONE, DataInfo.TransformType.NONE, true, false);
->>>>>>> arno_jenkins
       // todo: remove, result from h2o.1
      // beta = new double[]{0.06644411112189823, -0.11172826074033719, 9.77360531534266, -9.972691681370678, 0.24664516432994327, -0.12369381230741447, 0.11330593275731994, -19.64465932744036};
       LBFGS_LogisticGradientTask lt = (LBFGS_LogisticGradientTask)new LBFGS_LogisticGradientTask(dinfo,params,0,beta_1,1.0/380.0, null).doAll(dinfo._adaptedFrame);
@@ -877,11 +867,7 @@ public class GLMTest  extends TestUtil {
       params._train = frMM._key;
       params._use_all_factor_levels = true;
       // test the gram
-<<<<<<< HEAD
-      DataInfo dinfo = new DataInfo(Key.make(),frMM, null, 1, true, DataInfo.TransformType.STANDARDIZE, DataInfo.TransformType.NONE, true, 0);
-=======
       DataInfo dinfo = new DataInfo(Key.make(),frMM, null, 1, true, DataInfo.TransformType.STANDARDIZE, DataInfo.TransformType.NONE, true, false);
->>>>>>> arno_jenkins
       GLMIterationTask glmt = new GLMIterationTask(null,dinfo,1e-5,params,false,null,0,null, null).doAll(dinfo._adaptedFrame);
       for(int i = 0; i < glmt._xy.length; ++i) {
         for(int j = 0; j <= i; ++j ) {
@@ -987,7 +973,8 @@ public class GLMTest  extends TestUtil {
       for (int i = 0; i < chks[0]._len; ++i) {
         _m.score0(chks, i, null, ds);
         actual[0] = (float) chks[chks.length - 1].atd(i);
-        _val2.perRow(ds, actual, _m);
+        float row_weight = 1.0f; //FIXME PUBDEV-676
+        _val2.perRow(ds, actual, row_weight, _m);
       }
     }
 

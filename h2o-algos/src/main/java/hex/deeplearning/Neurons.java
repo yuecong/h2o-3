@@ -705,11 +705,7 @@ public abstract class Neurons {
             cats[ncats++] = c + _dinfo._catOffsets[i] - 1;
         }
       }
-<<<<<<< HEAD
       final int n = data.length - _dinfo._row_weights;
-=======
-      final int n = data.length; // data contains only input features - no response is included
->>>>>>> arno_jenkins
       for(;i < n;++i){
         double d = data[i];
         if(_dinfo._normMul != null) d = (d - _dinfo._normSub[i-_dinfo._cats])*_dinfo._normMul[i-_dinfo._cats];

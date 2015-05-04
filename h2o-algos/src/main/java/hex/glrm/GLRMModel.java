@@ -225,7 +225,7 @@ public class GLRMModel extends Model<GLRMModel,GLRMModel.GLRMParameters,GLRMMode
         _work = new double[dims];
       }
 
-      @Override public double[] perRow(double[] dataRow, float[] preds, Model m) { return dataRow; }
+      @Override public double[] perRow(double[] dataRow, float[] preds, float row_weight, Model m) { return dataRow; }
 
       @Override
       public ModelMetrics makeModelMetrics(Model m, Frame f, double sigma) {

@@ -1,9 +1,6 @@
 package hex.pca;
 
-import hex.DataInfo;
-import hex.Model;
-import hex.ModelMetrics;
-import hex.ModelMetricsPCA;
+import hex.*;
 import water.DKV;
 import water.Key;
 import water.MRTask;
@@ -62,14 +59,13 @@ public class PCAModel extends Model<PCAModel,PCAModel.PCAParameters,PCAModel.PCA
     return new ModelMetricsPCA.PCAModelMetrics(_parms._k);
   }
 
-<<<<<<< HEAD
   public static class ModelMetricsPCA extends ModelMetricsUnsupervised {
     public ModelMetricsPCA(Model model, Frame frame) {
-      super(model, frame);
+      super(model, frame, Double.NaN);
     }
 
     // PCA currently does not have any model metrics to compute during scoring
-    public static class PCAModelMetrics extends MetricBuilderUnsupervised {
+    public static class PCAModelMetrics extends ModelMetricsUnsupervised.MetricBuilderUnsupervised {
       public PCAModelMetrics(int dims) {
         _work = new double[dims];
       }
@@ -84,8 +80,6 @@ public class PCAModel extends Model<PCAModel,PCAModel.PCAParameters,PCAModel.PCA
     }
   }
 
-=======
->>>>>>> arno_jenkins
   @Override
   protected Frame scoreImpl(Frame orig, Frame adaptedFr, Vec row_weights, String destination_key) {
     Frame adaptFrm = new Frame(adaptedFr);

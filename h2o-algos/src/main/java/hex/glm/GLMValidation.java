@@ -42,21 +42,13 @@ public class GLMValidation extends MetricBuilderBinomial<GLMValidation> {
       :new MetricBuilderRegression();
   }
 
-<<<<<<< HEAD
-  public void add(double yreal, double eta, double ymodel){
-    null_deviance += _glm.deviance(yreal, eta, _ymu);
-    residual_deviance  += _glm.deviance(yreal, eta, ymodel);
-    ++nobs;
-    float row_weight = 1.0f; // FIXME
-    if( _auc_bldr != null ) _auc_bldr.perRow(ymodel, (int) yreal, row_weight);
-=======
   public double explainedDev(){
     return 1.0 - residualDeviance()/nullDeviance();
   }
 
 
-  @Override public double[] perRow(double ds[], float[] yact, Model m) {
-    _metricBuilder.perRow(ds,yact,m);
+  @Override public double[] perRow(double ds[], float[] yact, float row_weight, Model m) {
+    _metricBuilder.perRow(ds,yact,row_weight,m);
     if(!ArrayUtils.hasNaNsOrInfs(ds) && !ArrayUtils.hasNaNsOrInfs(yact)) {
       if (_glm._family == Family.binomial)
         add2(yact[0], ds[2]);
@@ -82,7 +74,6 @@ public class GLMValidation extends MetricBuilderBinomial<GLMValidation> {
   transient double [] _ds = new double[3];
   transient float [] _yact = new float[1];
 
->>>>>>> arno_jenkins
 
   public void add(double yreal, double ymodel) {
     _yact[0] = (float) yreal;
@@ -93,7 +84,8 @@ public class GLMValidation extends MetricBuilderBinomial<GLMValidation> {
     } else {
       _ds[0] = ymodel;
     }
-    _metricBuilder.perRow(_ds, _yact, null);
+    float row_weight = 1.0f; //FIXME PUBDEV-676
+    _metricBuilder.perRow(_ds, _yact, row_weight, null);
     add2(yreal, ymodel);
   }
   private void add2(double yreal, double ymodel) {

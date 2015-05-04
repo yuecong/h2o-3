@@ -369,18 +369,15 @@ public class DeepLearning extends SupervisedModelBuilder<DeepLearningModel,DeepL
         final long model_size = model.model_info().size();
         Log.info("Number of model parameters (weights/biases): " + String.format("%,d", model_size));
         model.write_lock(self());
-<<<<<<< HEAD
-        final DeepLearningModel.DeepLearningParameters mp = model._parms;
 
-        // Convention: Deep Learning *always* has a weight column now -> DataInfo
-        Frame tra_fr = addRowWeights(_train, rowWeights());
-        Frame val_fr = _valid == null ? null : addRowWeights(_valid, vrowWeights());
-=======
         new ProgressUpdate("Setting up training data...").fork(_progressKey);
         final DeepLearningModel.DeepLearningParameters mp = model.model_info().get_params();
+        // Convention: Deep Learning *always* has a weight column now -> DataInfo
         Frame tra_fr = new Frame(mp.train()._key, _train.names(), _train.vecs());
         Frame val_fr = _valid != null ? new Frame(mp.valid()._key, _valid.names(), _valid.vecs()) : null;
->>>>>>> arno_jenkins
+
+        tra_fr = addRowWeights(tra_fr, rowWeights());
+        val_fr = val_fr == null ? null : addRowWeights(val_fr, vrowWeights());
 
         train = tra_fr;
         if (mp._force_load_balance) {

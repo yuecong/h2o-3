@@ -178,11 +178,7 @@ class ModelMetricsHandler extends Handler {
     if (null == DKV.get(s.frame.name)) throw new H2OKeyNotFoundArgumentException("frame", "predict", s.frame.name);
 
     ModelMetricsList parms = s.createAndFillImpl();
-<<<<<<< HEAD
-    Frame fr = parms._model.score(parms._frame, null, parms._destination_key); // throw away predictions
-=======
-    Frame fr = parms._model.score(parms._frame, parms._predictions_name); // throw away predictions
->>>>>>> arno_jenkins
+    Frame fr = parms._model.score(parms._frame, null, parms._predictions_name); // throw away predictions
     DKV.remove(fr._key);
     ModelMetricsListSchemaV3 mm = this.fetch(version, s);
 
@@ -214,15 +210,9 @@ class ModelMetricsHandler extends Handler {
 
     Frame predictions;
     if (!s.reconstruction_error && s.deep_features_hidden_layer < 0 ) {
-<<<<<<< HEAD
-      if (null == parms._destination_key)
-        parms._destination_key = "predictions" + Key.make().toString().substring(0,5) + "_" + parms._model._key.toString() + "_on_" + parms._frame._key.toString();
-      predictions = parms._model.score(parms._frame, null, parms._destination_key);
-=======
       if (null == parms._predictions_name)
         parms._predictions_name = "predictions" + Key.make().toString().substring(0,5) + "_" + parms._model._key.toString() + "_on_" + parms._frame._key.toString();
-      predictions = parms._model.score(parms._frame, parms._predictions_name);
->>>>>>> arno_jenkins
+      predictions = parms._model.score(parms._frame, null, parms._predictions_name);
     } else {
       if (Model.DeepFeatures.class.isAssignableFrom(parms._model.getClass())) {
         if (s.reconstruction_error) {

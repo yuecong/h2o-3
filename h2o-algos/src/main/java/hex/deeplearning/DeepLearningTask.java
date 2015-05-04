@@ -57,12 +57,7 @@ public class DeepLearningTask extends FrameTask<DeepLearningTask> {
       seed = _dropout_rng.nextLong(); // non-reproducible case - make a fast & good random number
     }
     ((Neurons.Input)_neurons[0]).setInput(seed, r.numVals, r.nBins, r.binIds);
-<<<<<<< HEAD
-      step(seed, _neurons, _output, _training, r.response);
-
-=======
     step(seed, _neurons, _output, _training, r.response);
->>>>>>> arno_jenkins
   }
 
   @Override protected void chunkDone(long n) {

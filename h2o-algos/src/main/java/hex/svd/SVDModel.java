@@ -62,7 +62,7 @@ public class SVDModel extends Model<SVDModel,SVDModel.SVDParameters,SVDModel.SVD
         _work = new double[dims];
       }
 
-      @Override public double[] perRow(double[] dataRow, float[] preds, Model m) { return dataRow; }
+      @Override public double[] perRow(double[] dataRow, float[] preds, float row_weight, Model m) { return dataRow; }
 
       @Override public ModelMetrics makeModelMetrics(Model m, Frame f, double sigma) {
         return m._output.addModelMetrics(new ModelMetricsSVD(m, f));
@@ -70,7 +70,7 @@ public class SVDModel extends Model<SVDModel,SVDModel.SVDParameters,SVDModel.SVD
     }
   }
 
-  @Override protected Frame scoreImpl(Frame orig, Frame adaptedFr, String destination_key) {
+  @Override protected Frame scoreImpl(Frame orig, Frame adaptedFr, Vec row_weight, String destination_key) {
     Frame adaptFrm = new Frame(adaptedFr);
     for(int i = 0; i < _parms._nv; i++)
       adaptFrm.add("PC"+String.valueOf(i+1),adaptFrm.anyVec().makeZero());
@@ -107,10 +107,10 @@ public class SVDModel extends Model<SVDModel,SVDModel.SVDParameters,SVDModel.SVD
     return preds;
   }
 
-  @Override public Frame score(Frame fr, String destination_key) {
+  @Override public Frame score(Frame fr, Vec row_weights, String destination_key) {
     Frame adaptFr = new Frame(fr);
     adaptTestForTrain(adaptFr, true);   // Adapt
-    Frame output = scoreImpl(fr, adaptFr, destination_key); // Score
+    Frame output = scoreImpl(fr, adaptFr, row_weights, destination_key); // Score
 
     Vec[] vecs = adaptFr.vecs();
     for (int i = 0; i < vecs.length; i++)

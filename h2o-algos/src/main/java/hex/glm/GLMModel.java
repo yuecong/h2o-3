@@ -31,54 +31,11 @@ public class GLMModel extends SupervisedModel<GLMModel,GLMModel.GLMParameters,GL
     _dinfo = dinfo;
   }
 
-<<<<<<< HEAD
-  public DataInfo dinfo() { return _dinfo; }
-
-  public static class GLMMetricsBuilderBinomial<T extends GLMMetricsBuilderBinomial<T>> extends MetricBuilderBinomial<T> {
-    double _resDev;
-    double _nullDev;
-
-    public GLMMetricsBuilderBinomial(String[] domain) {
-      super(domain == null?new String[]{"0","1"}:domain);
-    }
-
-    @Override
-    public double[] perRow(double[] ds, float[] yact, float row_weight, Model m) {
-      double [] res = super.perRow(ds,yact, row_weight, m);
-      GLMModel gm = (GLMModel)m;
-      assert gm._parms._family == Family.binomial;
-      _resDev += gm._parms.deviance(yact[0], (float)ds[2]);
-      _nullDev += gm._parms.deviance(yact[0],(float)gm._ymu);
-      return res;
-    }
-
-    @Override public void reduce( T mb ) {
-      super.reduce(mb);
-      _resDev += mb._resDev;
-      _nullDev += mb._nullDev;
-    }
-
-    private static int rank(double [] beta) {
-      int res = 0;
-      for(double d:beta)
-        if(d != 0) ++res;
-      return res;
-    }
-
-    @Override public ModelMetrics makeModelMetrics(Model m, Frame f, double sigma) {
-      GLMModel gm = (GLMModel)m;
-      assert gm._parms._family == Family.binomial;
-      AUC2 auc = new AUC2(_auc);
-      double mse = _sumsqe / _count;
-      ModelMetrics res = new ModelMetricsBinomialGLM(m, f, mse, _domain, sigma, auc, _resDev, _nullDev, _resDev + 2*rank(gm.beta()));
-      return m._output.addModelMetrics(res);
-=======
   @Override
   protected boolean toJavaCheckTooBig() {
     if(beta().length > 10000) {
       Log.warn("toJavaCheckTooBig must be overridden for this model type to render it in the browser");
       return true;
->>>>>>> arno_jenkins
     }
     return false;
   }
