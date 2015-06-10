@@ -141,9 +141,9 @@ randomParams <- function(family, train, test, x, y) {
 
   h2o.rm(hh@model_id)
   print("#########################################################################################")
-    print("")
-    print(t)
-    print("")
+  print("")
+  print(t)
+  print("")
 }
 
 test.glm.rand_attk_forloop <- function(conn) {

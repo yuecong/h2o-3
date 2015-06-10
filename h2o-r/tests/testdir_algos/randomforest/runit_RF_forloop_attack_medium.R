@@ -66,11 +66,13 @@ randomParams <- function(train, test, x, y) {
     dep = !is.null(parms$balance_classes) && parms$balance_classes)
 
   t <- system.time(hh <- do.call("h2o.randomForest", parms))
-  cat("\n\n\n")
   print(hh)
-  print(t)
-  cat("\n\n\n")
+
   h2o.rm(hh@model_id)
+  print("#########################################################################################")
+  print("")
+  print(t)
+  print("")
 }
 
 test.RF.rand_attk_forloop <- function(conn) {
